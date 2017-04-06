@@ -4,3 +4,4 @@ npm-debug.log
 coverage
 .vscode/
 yarn.lock
+yarn-error.log

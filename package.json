@@ -4,7 +4,9 @@
     "url": "https://github.com/TencentWSRD/connect-cas2/issues"
   },
   "dependencies": {
+    "co": "^4.6.0",
     "deprecate": "^0.1.0",
+    "is-type-of": "^1.0.0",
     "lodash": "^4.13.1",
     "query-string": "^4.1.0",
     "xml2js": "^0.4.16"
@@ -17,6 +19,8 @@
     "coveralls": "^2.11.12",
     "ejs": "^2.4.2",
     "es6-promise": "^3.2.1",
+    "eslint": "3.6.0",
+    "eslint-config-egg": "^3.2.0",
     "express": "^4.13.4",
     "express-session": "^1.13.0",
     "istanbul": "^0.4.4",

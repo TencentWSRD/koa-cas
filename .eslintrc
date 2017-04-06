@@ -1,0 +1,83 @@
+{
+  "extends": "eslint-config-egg",
+  "globals": {
+    "app": true,
+    "request": true,
+    "mm": true,
+    "mock": true,
+    "assert": true,
+    "server": true
+  },
+
+  "rules": {
+    "strict" : 0,
+    "arrow-parens": [
+      "error",
+      "always"
+    ],
+    "arrow-body-style": [
+      0,
+      "as-needed"
+    ],
+    "comma-dangle": [
+      2,
+      "always-multiline"
+    ],
+    "quotes": [
+      1,
+      "single"
+    ],
+    "quote-props": [
+      2
+      // "as-needed", {
+      //   "keywords": true,
+      //   "unnecessary": true
+      // }
+    ],
+    "radix": [
+      "error",
+      "as-needed"
+    ],
+    "indent": [
+      2,
+      2,
+      {
+        "SwitchCase": 1
+      }
+    ],
+    "require-yield": 0,
+    "no-else-return": 0,
+    "max-len": 0,
+    "newline-per-chained-call": 0,
+    "no-console": 0,
+    "no-use-before-define": 0,
+    "prefer-template": 2,
+    "class-methods-use-this": 0,
+    "func-names": 0,
+    "no-unused-expressions": [
+      2,
+      {
+        "allowShortCircuit": true,
+        "allowTernary": true
+      }
+    ],
+    "no-plusplus": 0,
+    "camelcase": 1,
+    "no-param-reassign": 0,
+    "no-underscore-dangle": 0,
+    "prefer-spread": [
+      "warn"
+    ],
+    "no-confusing-arrow": 1,
+    "no-nested-ternary": 0,
+    "no-shadow": 1,
+    "no-sequences": 0,
+    "no-return-assign": 1,
+    "operator-assignment": 0,
+    "no-restricted-syntax": 0,
+    "global-require": 0,
+    "no-script-url": 0,
+    "no-mixed-operators": 0,
+    "generator-star-spacing": 0
+  }
+}
