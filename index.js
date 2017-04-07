@@ -178,12 +178,12 @@ class ConnectCas {
       if (matchedRestletIntegrateRule) {
         logger.info('Match restlet integration rule: ', matchedRestletIntegrateRule);
         yield afterHook();
-        yield next;
+        return yield next;
       }
 
       if (utils.shouldIgnore(req, options)) {
         yield afterHook();
-        yield next;
+        return yield next;
       }
 
       if (method === 'GET') {

@@ -6,6 +6,7 @@ import session from 'koa-generic-session';
 import bodyParser from 'koa-bodyparser';
 import cookie from 'koa-cookie';
 import Router from 'koa-router';
+import json from 'koa-json';
 import CasClient from '../../index';
 import _ from 'lodash';
 
@@ -17,7 +18,10 @@ import _ from 'lodash';
  * @param {Function} hookAfterCasConfig (Optional)
  * @returns {*}
  */
-module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConfig) {
+module.exports = function(app, casOptions, {
+  beforeCasConfigHook,
+  afterCasConfigHook,
+} = {}) {
 
   app.keys = [ 'cas', 'test' ];
   app.use(cookie('here is some secret'));
@@ -26,6 +30,7 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
     store: session.MemoryStore(),
   }));
   app.use(convert(bodyParser()));
+  app.use(convert(json()));
 
   const demoParams = {
     appId: '900007430',
@@ -34,7 +39,7 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
     appKey: 'BXEKfudgcgVDBb8k',
   };
 
-  if (typeof hookBeforeCasConfig === 'function') hookBeforeCasConfig(app);
+  if (typeof beforeCasConfigHook === 'function') beforeCasConfigHook(app);
 
   const defaultOptions = {
     ignore: [
@@ -95,7 +100,7 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
   // CAS config
   // =============================================================================
   const casClient = new CasClient(defaultOptions);
-  app.use(casClient.core());
+  app.use(convert(casClient.core()));
 
 
   // console.log('defaultOptions', defaultOptions);
@@ -104,7 +109,7 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
   //   app.use(casClient.slo());
   // }
 
-  if (typeof hookAfterCasConfig === 'function') hookAfterCasConfig(app);
+  if (typeof afterCasConfigHook === 'function') afterCasConfigHook(app);
 
   // if (typeof hookAfterCasConfig === 'function') {
   //   console.log('hookAfterCasConfig', hookAfterCasConfig);
@@ -114,10 +119,17 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
   const router = new Router();
   router.get('/logout', casClient.logout());
   router.get('/', function* () {
-    console.log('hello /');
+    console.log('GET / DONE');
     this.body = 'ok';
   });
-  app.use(router.routes(), router.allowedMethods());
+  app
+    .use(router.routes())
+    .use(router.allowedMethods());
+
+  app.on('error', (err, ctx) => {
+    console.log(err);
+    console.error('server error', err, ctx);
+  });
 
   return app;
 };

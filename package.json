@@ -47,10 +47,12 @@
     "koa-convert": "^1.2.0",
     "koa-cookie": "^1.0.0",
     "koa-generic-session": "^1.11.5",
-    "koa-router": "^5.4.0",
+    "koa-json": "^2.0.2",
+    "koa-router": "5.4.0",
     "mocha": "^3.2.0",
     "mocha-lcov-reporter": "^1.2.0",
     "rewire": "^2.5.2",
+    "supertest": "^3.0.0",
     "uuid": "^2.0.2"
   },
   "directories": {

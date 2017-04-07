@@ -1,13 +1,13 @@
 function setCookies(headers) {
   if (!headers) headers = {};
 
-  var cookies = {};
+  const cookies = {};
 
   if ('set-cookie' in headers) {
     headers['set-cookie'].forEach(function(cookie) {
-      var cookieArr = cookie.split(';');
+      const cookieArr = cookie.split(';');
 
-      var keyValuePair = cookieArr[0].split('=');
+      const keyValuePair = cookieArr[0].split('=');
 
       cookies[keyValuePair[0]] = keyValuePair[1];
     });
@@ -19,16 +19,16 @@ function setCookies(headers) {
 function getCookies(cookies) {
   if (!cookies) cookies = {};
 
-  var cookieArr = [];
+  const cookieArr = [];
 
-  for (var i in cookies) {
-    cookieArr.push(i + '=' + cookies[i]);
+  for (const i in cookies) {
+    cookieArr.push(`${i}=${cookies[i]}`);
   }
 
   return cookieArr.join('; ');
 }
 
 module.exports = {
-  getCookies: getCookies,
-  setCookies: setCookies
+  getCookies,
+  setCookies,
 };
