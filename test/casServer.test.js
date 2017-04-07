@@ -55,8 +55,7 @@ describe('cas server如预期', function() {
         const serviceUri = url.parse(service, true);
         const locationUri = url.parse(res.header.location, true);
         expect(locationUri.host + locationUri.pathname).to.equal(serviceUri.host + locationUri.pathname);
-      })
-      .end(done);
+      }).end(done);
   });
 
   it('访问/cas/serviceValidate, 没带ticket, 返回200, xml内authenticationFailure', function(done) {
@@ -69,8 +68,7 @@ describe('cas server如预期', function() {
           .then((info) => {
             expect(info).to.deep.equal({});
             done();
-          })
-          .catch(done);
+          }).catch(done);
       });
   });
 
@@ -104,22 +102,24 @@ describe('cas server如预期', function() {
   it('访问/cas/serviceValidate, 带ticket, ticket合法, 无pgtUrl, 直接响应成功xml, 带userId', function(done) {
     casServerFactory(app);
     const service = 'http://localhost:3002/cas/validate';
-    request.get(`/cas/login?service=${encodeURIComponent(service)}`).end((err, response) => {
-      const uri = url.parse(response.header.location, true);
-      const ticket = uri.query.ticket;
+    request.get(`/cas/login?service=${encodeURIComponent(service)}`)
+      .expect(200)
+      .end((err, response) => {
+        const uri = url.parse(response.header.location, true);
+        const ticket = uri.query.ticket;
 
-      request.get(`/cas/serviceValidate?service=${encodeURIComponent(service)}&ticket=${ticket}`)
-        .expect(200)
-        .end((err, res) => {
-          parseCasResponse(res.body, logger, (err, info) => {
-            expect(info.user).to.not.be.empty;
-            done();
+        request.get(`/cas/serviceValidate?service=${encodeURIComponent(service)}&ticket=${ticket}`)
+          .expect(200)
+          .end((err, res) => {
+            parseCasResponse(res.text, logger).then((info) => {
+              expect(info.user).to.not.be.empty;
+              done();
+            }).catch(done);
           });
-        });
-    });
+      });
   });
 
-  it.only('访问/cas/serviceValidate, 带ticket, ticket合法, 有pgtUrl, 先调pgtUrl, 传过去pgtIou和pgtId, 然后响应成功xml, 带userId和pgtIou', function(done) {
+  it('访问/cas/serviceValidate, 带ticket, ticket合法, 有pgtUrl, 先调pgtUrl, 传过去pgtIou和pgtId, 然后响应成功xml, 带userId和pgtIou', function(done) {
     casServerFactory(app);
 
     // cas client
@@ -139,16 +139,12 @@ describe('cas server如预期', function() {
         this.status = 400;
       }
     });
-    app.use(router.routes()).use(router.allowedMethods());
+    appLocal.use(router.routes()).use(router.allowedMethods());
 
     const serverLocal = appLocal.listen(localPort, (err) => {
       if (err) throw err;
       const service = `${localHost}:${localPort}/cas/validate`;
       const pgtUrl = `${localHost}:${localPort}/cas/proxyCallback`;
-
-      supertest.get('http://localhost:3002/cas/proxyCallback').end((err, res) => {
-        console.log('res: ', res.status);
-      });
 
       request.get(`/cas/login?service=${encodeURIComponent(service)}`).end((err, response) => {
         const uri = url.parse(response.header.location, true);
@@ -201,57 +197,45 @@ describe('cas server如预期', function() {
 
       request.get(`/cas/serviceValidate?service=${encodeURIComponent(service)}&ticket=${ticket}`)
         .expect(200)
-        .expect((res) => {
-          parseCasResponse(res.body, logger, function(err, info) {
+        .end((err, res) => {
+          parseCasResponse(res.text, logger).then((info) => {
             expect(info.user).to.be.empty;
             done();
-          });
+          }).catch(done);
         });
     });
   });
 
   it('/cas/proxy接口,参数正确能够正确获取pt', function(done) {
     casServerFactory(app);
-    request.get('/cas/proxy?pgt=fakePgtId&targetService=xxx').expect(200).end((err, response) => {
-      expect(response.body).to.not.be.empty;
-
-      let pt;
-      if (/<cas:proxySuccess/.exec(response.body)) {
-        if (/<cas:proxyTicket>(.*)<\/cas:proxyTicket>/.exec(response.body)) {
-          pt = RegExp.$1;
-        }
-      }
-      expect(pt).to.not.be.empty;
-      done();
-    });
+    request.get('/cas/proxy?pgt=fakePgtId&targetService=xxx')
+      .expect(200)
+      .end((err, response) => {
+        expect(response.text).to.not.be.empty;
+        const pt = parseProxyTicketResponse(response.text);
+        expect(pt).to.not.be.empty;
+        done();
+      });
   });
 
-  it('/cas/proxy接口,无pgt参数', function(done) {
+  it('/cas/proxy接口,无pgt参数, 无法正确获取pt', function(done) {
     casServerFactory(app);
-    request.get('/cas/proxy?targetService=xxx').expect(200).end((err, response) => {
-      expect(response.body).to.not.be.empty;
-      let pt;
-      if (/<cas:proxySuccess/.exec(response.body)) {
-        if (/<cas:proxyTicket>(.*)<\/cas:proxyTicket>/.exec(response.body)) {
-          pt = RegExp.$1;
-        }
-      }
-      expect(pt).to.be.empty;
-      done();
-    });
+    request.get('/cas/proxy?targetService=xxx')
+      .expect(200)
+      .end((err, res) => {
+        expect(res.text).to.not.be.empty;
+        const pt = parseProxyTicketResponse(res.text);
+        expect(pt).to.be.empty;
+        done();
+      });
   });
 
-  it('/cas/proxy接口,无targetService参数', function(done) {
+  it('/cas/proxy接口,无targetService参数, 无法获取正确的pt', function(done) {
     casServerFactory(app);
 
-    request.get('/cas/proxy?pgt=fakePgtId').expect(200).end((err, response) => {
-      expect(response.body).to.not.be.empty;
-      let pt;
-      if (/<cas:proxySuccess/.exec(response.body)) {
-        if (/<cas:proxyTicket>(.*)<\/cas:proxyTicket>/.exec(response.body)) {
-          pt = RegExp.$1;
-        }
-      }
+    request.get('/cas/proxy?pgt=fakePgtId').expect(200).end((err, res) => {
+      expect(res.text).to.not.be.empty;
+      const pt = parseProxyTicketResponse(res.text);
       expect(pt).to.be.empty;
       done();
     });
@@ -265,17 +249,17 @@ describe('cas server如预期', function() {
       password: 'password',
       type: 8,
       from: service,
-    }).expect(200).expect((response) => {
-      const pgtId = parseRestletResponse(response.body);
+    }).expect(200).end((err, response) => {
+      const pgtId = parseRestletResponse(response.text);
       expect(pgtId).to.not.be.empty;
 
       request.get(`/cas/proxy?pgt=${pgtId}&targetService=xxx`)
         .expect(200)
-        .expect((res) => {
-          const pt = parseProxyTicketResponse(res.body);
+        .end((err, res) => {
+          const pt = parseProxyTicketResponse(res.text);
           expect(pt).to.not.be.empty;
-        })
-        .end(done);
+          done(err);
+        });
     });
   });
 
@@ -298,20 +282,26 @@ describe('cas server如预期', function() {
       password: 'password',
       type: 8,
       from: service,
-    }).expect(200).expect((response) => {
-      const pgtId = parseRestletResponse(response.body);
-      expect(pgtId).to.not.be.empty;
+    }).expect(200)
+      .end((_, res) => {
+        const pgtId = parseRestletResponse(res.text);
+        expect(pgtId).to.not.be.empty;
 
-      request.get(`/cas/proxy?pgt=${pgtId}&targetService=xxx`).expect(200).expect((res) => {
-        const pt = parseProxyTicketResponse(res.body);
-        expect(pt).to.not.be.empty;
+        request.get(`/cas/proxy?pgt=${pgtId}&targetService=xxx`)
+          .expect(200)
+          .end((_, res) => {
+            const pt = parseProxyTicketResponse(res.text);
+            expect(pt).to.not.be.empty;
 
-        request.delete(`/cas/proxy?pgt=${pgtId}&targetService=xxx`).expect(200).expect((response) => {
-          const nowPt = parseRestletResponse(response.body);
-          expect(nowPt).to.be.empty;
-        }).end(done);
+            request.delete(`/cas/proxy?pgt=${pgtId}&targetService=xxx`)
+              .expect(200)
+              .end((_, res) => {
+                const nowPt = parseRestletResponse(res.text);
+                expect(nowPt).to.be.empty;
+                done();
+              });
+          });
       });
-    });
   });
 
 });

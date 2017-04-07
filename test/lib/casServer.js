@@ -19,7 +19,7 @@ import url from 'url';
 function getSuccessResponse(pgtIou) {
   let res = `
   <cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'> +
-    <cas:authenticationSuccess> 
+    <cas:authenticationSuccess>
     <cas:user>DEFAULT_USER_NAME</cas:user>
   `;
 
@@ -31,7 +31,7 @@ function getSuccessResponse(pgtIou) {
 }
 
 function getFailResponse(st) {
-  return ` 
+  return `
       <cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'>
       <cas:authenticationFailure code='INVALID_TICKET'>
       未能够识别出目标 &#039;${st}&#039;票根
@@ -269,11 +269,11 @@ module.exports = (app, options) => {
     const username = 'username';
     const passworld = 'password';
     const type = 8;
-
-    if (this.body &&
-      this.body.username === username &&
-      this.body.type === type &&
-      this.body.password === passworld) {
+    const body = this.request.body;
+    if (body &&
+      body.username === username &&
+      body.type === type &&
+      body.password === passworld) {
       const pgtId = uuid.v4();
       tgts[pgtId] = initTgt();
       this.body = getRestletIntegrationPGT(pgtId);
