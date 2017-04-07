@@ -1,8 +1,28 @@
 {
-  "author": "TencentWSRD",
-  "bugs": {
-    "url": "https://github.com/TencentWSRD/connect-cas2/issues"
+  "name": "koa-cas",
+  "version": "1.1.31",
+  "main": "index.js",
+  "license": "MIT",
+  "author": "allanfish",
+  "homepage": "https://github.com/allanfish/koa-cas",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allanyu/koa-cas.git"
   },
+  "scripts": {
+    "start": "node ./example",
+    "mocha": "mocha --compilers js:babel-register",
+    "test": "istanbul cover -x 'example/**' _mocha -- -R spec"
+  },
+  "bugs": {
+    "url": "https://github.com/allanfish/koa-cas/issues"
+  },
+  "maintainers": [
+    {
+      "email": "allanyu@tencent.com",
+      "name": "allanyu"
+    }
+  ],
   "dependencies": {
     "co": "^4.6.0",
     "deprecate": "^0.1.0",
@@ -13,44 +33,27 @@
   },
   "description": "NodeJS implement of CAS(Central Authentication Service) client.",
   "devDependencies": {
-    "body-parser": "^1.15.1",
+    "babel-preset-env": "^1.3.2",
+    "babel-register": "^6.24.0",
+    "babel-runtime": "^6.23.0",
     "chai": "^3.5.0",
-    "cookie-parser": "^1.4.3",
     "coveralls": "^2.11.12",
     "ejs": "^2.4.2",
-    "es6-promise": "^3.2.1",
     "eslint": "3.6.0",
     "eslint-config-egg": "^3.2.0",
-    "express": "^4.13.4",
-    "express-session": "^1.13.0",
     "istanbul": "^0.4.4",
-    "lodash": "^4.13.1",
-    "mocha": "^2.5.3",
+    "koa": "^2.x",
+    "koa-bodyparser": "^2.x",
+    "koa-convert": "^1.2.0",
+    "koa-cookie": "^1.0.0",
+    "koa-generic-session": "^1.11.5",
+    "koa-router": "^5.4.0",
+    "mocha": "^3.2.0",
     "mocha-lcov-reporter": "^1.2.0",
     "rewire": "^2.5.2",
-    "session-memory-store": "^0.2.2",
     "uuid": "^2.0.2"
   },
   "directories": {
     "lib": "./lib"
-  },
-  "homepage": "https://github.com/TencentWSRD/connect-cas2",
-  "license": "MIT",
-  "main": "index.js",
-  "maintainers": [
-    {
-      "email": "xiaoyuze88@gmail.com",
-      "name": "xiaoyuze88"
-    }
-  ],
-  "name": "connect-cas2",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/TencentWSRD/connect-cas2.git"
-  },
-  "scripts": {
-    "start": "node ./example",
-    "test": "istanbul cover -x 'example/**' _mocha -- -R spec"
-  },
-  "version": "1.1.31"
+  }
 }

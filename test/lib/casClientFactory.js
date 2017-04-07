@@ -1,17 +1,15 @@
 /**
  * For testing usage, separate the global config of the app
  */
-var path = require('path');
-var session = require('express-session');
+import convert from 'koa-convert';
+import session from 'koa-generic-session';
+import bodyParser from 'koa-bodyparser';
+import cookie from 'koa-cookie';
+import Router from 'koa-router';
+import CasClient from '../../index';
+import _ from 'lodash';
 
-var bodyParser = require('body-parser');
-var cookieParser = require('cookie-parser');
-var CasClient = require('../..//index');
-var ejs = require('ejs');
-
-var _ = require('lodash');
-
-/**
+/*
  *
  * @param app
  * @param {Object} casOptions (Optional)
@@ -20,30 +18,27 @@ var _ = require('lodash');
  * @returns {*}
  */
 module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConfig) {
-  app.use(cookieParser('here is some secret'));
 
-  var MemoryStore = require('session-memory-store')(session);
-
+  app.keys = [ 'cas', 'test' ];
+  app.use(cookie('here is some secret'));
   app.use(session({
-    resave: true,
-    saveUninitialized: true,
-    secret: 'I am a secret',
-    name: 'jssessionid',
-    store: new MemoryStore()
+    key: 'SESSIONID', // default "koa:sess"
+    store: session.MemoryStore(),
   }));
+  app.use(convert(bodyParser()));
 
-  var demoParams = {
+  const demoParams = {
     appId: '900007430',
     pid: '1',
     type: 8,
-    appKey: 'BXEKfudgcgVDBb8k'
+    appKey: 'BXEKfudgcgVDBb8k',
   };
 
   if (typeof hookBeforeCasConfig === 'function') hookBeforeCasConfig(app);
 
-  var defaultOptions = {
+  const defaultOptions = {
     ignore: [
-      /\/ignore/
+      /\/ignore/,
     ],
     match: [],
     servicePrefix: 'http://10.17.86.87:8080',
@@ -55,7 +50,7 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
       login: '/cas/login',
       logout: '/cas/logout',
       proxyCallback: '/cas/proxyCallback',
-      restletIntegration: '/buglycas/v1/tickets'
+      restletIntegration: '/buglycas/v1/tickets',
     },
     redirect: false,
     gateway: false,
@@ -66,30 +61,32 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
       ttl: 5 * 60 * 1000,
       filter: [
         // /betaserverpre\.et\.wsd\.com/
-      ]
+      ],
     },
     fromAjax: {
       header: 'x-client-ajax',
-      status: 418
+      status: 418,
     },
-    logger: function(req, type) {
-      return function() {
-      };
+    logger(req, type) {
+      return function() {};
     },
     restletIntegration: {
       demo1: {
-        trigger: function(req) {
+        trigger(ctx) {
           // console.log('Checking restletIntegration rules');
-          return false
+          return false;
         },
         params: {
-          username: demoParams.appId + '_' + demoParams.pid,
+          username: `${demoParams.appId}_${demoParams.pid}`,
           from: 'http://10.17.86.87:8080/cas/validate',
           type: demoParams.type,
-          password: JSON.stringify({ appId: demoParams.appId + '_' + demoParams.pid, appKey: demoParams.appKey })
-        }
-      }
-    }
+          password: JSON.stringify({
+            appId: `${demoParams.appId}_${demoParams.pid}`,
+            appKey: demoParams.appKey,
+          }),
+        },
+      },
+    },
   };
 
   if (casOptions) {
@@ -97,16 +94,9 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
   }
   // CAS config
   // =============================================================================
-  var casClient = new CasClient(defaultOptions);
-
+  const casClient = new CasClient(defaultOptions);
   app.use(casClient.core());
 
-  app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
-
-  app.engine('.html', ejs.renderFile);
-  app.set('view engine', 'html');
-  app.set('views', path.join(__dirname, './views'));
 
   // console.log('defaultOptions', defaultOptions);
 
@@ -121,11 +111,13 @@ module.exports = function(app, casOptions, hookBeforeCasConfig, hookAfterCasConf
   //   hookAfterCasConfig(app);
   // }
 
-  app.get('/logout', casClient.logout());
-
-  app.get('/', function(req, res) {
-    res.send('ok');
+  const router = new Router();
+  router.get('/logout', casClient.logout());
+  router.get('/', function* () {
+    console.log('hello /');
+    this.body = 'ok';
   });
+  app.use(router.routes(), router.allowedMethods());
 
   return app;
 };

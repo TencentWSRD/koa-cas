@@ -11,6 +11,7 @@ const clearRestletTGTs = require('./lib/clearRestletTGTs');
 const url = require('url');
 const deprecate = require('deprecate');
 const is = require('is-type-of');
+const co = require('co');
 
 const DEFAULT_OPTIONS = {
   ignore: [],
@@ -48,7 +49,7 @@ const DEFAULT_OPTIONS = {
 };
 
 
-module.exports = class ConnectCas {
+class ConnectCas {
 
   constructor(options) {
     /* istanbul ignore if */
@@ -81,51 +82,45 @@ module.exports = class ConnectCas {
     }
 
     const pgtURI = url.parse(this.options.paths.proxyCallback || '', true);
-
     this.proxyCallbackPathName = (pgtURI.protocol && pgtURI.host) ? pgtURI.pathname : this.options.paths.proxyCallback;
-
   }
 
 
   core() {
     const options = this.options;
     const that = this;
-
-    if (options.hooks && is.generatorFunction(options.hooks.before)) {
-      return function* (next) {
-        yield options.hooks.before(this, next);
-        yield coreMiddleware.bind(this, next);
-      };
-    } else {
-      return coreMiddleware;
-    }
-
-    function* coreMiddleware(next) {
+    return function* coreMiddleware(next) {
       const ctx = this;
       const req = this.request;
-      if (!this.request.sessionStore) throw new Error('You must setup a session store before you can use CAS client!');
-      if (!this.request.session) throw new Error(`Unexpected req.session ${this.request.session}`);
+      if (!ctx.sessionStore) throw new Error('You must setup a session store before you can use CAS client!');
+      if (!ctx.session) throw new Error(`Unexpected ctx.session ${ctx.session}`);
 
-      const logger = utils.getLogger(this.request, options);
+      if (options.hooks && is.function(options.hooks.before)) {
+        yield options.hooks.before(this, next);
+      }
+
+      const logger = utils.getLogger(req, options);
       const pathname = this.path;
       const method = this.method;
 
       let matchedRestletIntegrateRule;
 
       if (options.restletIntegration) {
-        if (options.paths.restletIntegration) {
-          this.request.clearRestlet = clearRestletTGTs.bind(null, options, logger);
+        if (!options.paths.restletIntegration) {
+          logger.warn('options.restletIntegration is set, but options.paths.restletIntegration is undefined! Maybe you forget to set all your paths.');
+        } else {
+          req.clearRestlet = co.wrap(function* () {
+            return yield clearRestletTGTs.bind(null, options, logger);
+          });
 
           for (const i in options.restletIntegration) {
             if (options.restletIntegration[i] &&
               is.function(options.restletIntegration[i].trigger) &&
-              options.restletIntegration[i].trigger(this.request)) {
+              options.restletIntegration[i].trigger(req)) {
               matchedRestletIntegrateRule = i;
               break;
             }
           }
-        } else {
-          logger.warn('options.restletIntegration is set, but options.paths.restletIntegration is undefined! Maybe you forget to set all your paths.');
         }
       }
 
@@ -143,97 +138,87 @@ module.exports = class ConnectCas {
        * @param {Function}  callback
        * @returns {*}
        */
-      this.request.getProxyTicket = function(targetService, proxyOptions, callback) {
+      req.getProxyTicket = function(targetService, proxyOptions) {
+        return co.wrap(function* () {
+          if (typeof proxyOptions === 'function') {
+            proxyOptions = { // eslint-disable-line no-param-reassign
+              disableCache: false,
+            };
+          } else if (typeof proxyOptions === 'boolean') {
+            proxyOptions = { // eslint-disable-line no-param-reassign
+              disableCache: proxyOptions,
+            };
+          }
 
-        if (typeof proxyOptions === 'function') {
-          callback = proxyOptions; // eslint-disable-line no-param-reassign
-          proxyOptions = { // eslint-disable-line no-param-reassign
-            disableCache: false,
-          };
-        } else if (typeof proxyOptions === 'boolean') {
-          proxyOptions = { // eslint-disable-line no-param-reassign
-            disableCache: proxyOptions,
-          };
-        }
+          proxyOptions.targetService = targetService;
+          if (!options.paths.proxyCallback) {
+            logger.warn('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
+            throw new Error('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
+          }
 
-        proxyOptions.targetService = targetService;
-
-        if (options.paths.proxyCallback) {
           let restletIntegrateParams;
           if (matchedRestletIntegrateRule) {
             if (is.function(options.restletIntegration[matchedRestletIntegrateRule].params)) {
               logger.info('Match restlet integration rule and using aync manner, whitch using function to return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
-              restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params(this.request);
+              restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params(req);
             } else {
               logger.info('Match restlet integration rule and using default manner, whitch just directly return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
               restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params;
             }
           }
-          matchedRestletIntegrateRule ? getProxyTicketThroughRestletReq.call(that, this.request, targetService, {
+          return matchedRestletIntegrateRule ? yield getProxyTicketThroughRestletReq.call(that, req, targetService, {
             name: matchedRestletIntegrateRule,
             params: restletIntegrateParams,
             cache: options.restletIntegrationIsUsingCache,
-          }, callback) : getProxyTicket.call(that, this.request, proxyOptions, callback);
-        } else {
-          logger.warn('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
-          // TODO: Should this throw an error?
-          // new Error('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!'
-          callback();
-        }
+          }) : yield getProxyTicket.call(that, req, proxyOptions);
+        });
       };
 
+      const afterHook = options.hooks && is.function(options.hooks.after) ? options.hooks.after.bind(this, ctx, next) : () => Promise.resolve();
       if (matchedRestletIntegrateRule) {
         logger.info('Match restlet integration rule: ', matchedRestletIntegrateRule);
-        return yield doNext(next);
+        yield afterHook();
+        yield next;
       }
 
       if (utils.shouldIgnore(req, options)) {
-        return yield doNext(next);
+        yield afterHook();
+        yield next;
       }
 
       if (method === 'GET') {
         switch (pathname) {
           case options.paths.validate:
-            return yield validate(ctx, doNext, options);
+            return yield validate(ctx, afterHook, options);
           case that.proxyCallbackPathName:
-            return yield proxyCallback(req, doNext, options);
+            return yield proxyCallback(ctx, afterHook, options);
           default:
-            throw new Error(`koa-cas middleware don't support GET ${this.path}`);
+            break;
         }
       } else if (method === 'POST' && pathname === options.paths.validate && options.slo) {
-        return slo(req, doNext, options);
-      } else {
-        return authenticate(req, doNext, options);
+        return yield slo(ctx, afterHook, options);
       }
-
-
-      function* doNext(callback) {
-        if (options.hooks && is.generatorFunction(options.hooks.after)) {
-          yield options.hooks.after(ctx, next);
-        }
-        yield callback();
-      }
-    }
+      return yield authenticate(ctx, afterHook, next, options);
+    };
   }
 
   logout() {
     const options = this.options;
 
-    return function(req, res) {
-      if (!req.session) {
-        return res.redirect('/');
+    return function* (ctx, next) {
+      if (!ctx.session) {
+        return ctx.redirect('/');
       }
       // Forget our own login session
 
-      if (req.session.destroy) {
-        req.session.destroy();
+      if (ctx.session.destroy) {
+        yield ctx.session.destroy();
       } else {
         // Cookie-based sessions have no destroy()
-        req.session = null;
+        ctx.session = null;
       }
-
       // Send the user to the official campus-wide logout URL
-      return res.redirect(utils.getPath('logout', options));
+      return ctx.redirect(utils.getPath('logout', options));
     };
   }
 
@@ -241,4 +226,6 @@ module.exports = class ConnectCas {
     return utils.getPath(name, this.options);
   }
 
-};
+}
+
+module.exports = ConnectCas;
