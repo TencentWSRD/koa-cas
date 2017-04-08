@@ -9,6 +9,9 @@
     "type": "git",
     "url": "git+https://github.com/allanyu/koa-cas.git"
   },
+  "engines": {
+    "node": ">=6.0.0"
+  },
   "scripts": {
     "start": "node ./example",
     "mocha": "mocha --compilers js:babel-register",
@@ -17,12 +20,10 @@
   "bugs": {
     "url": "https://github.com/allanfish/koa-cas/issues"
   },
-  "maintainers": [
-    {
-      "email": "allanyu@tencent.com",
-      "name": "allanyu"
-    }
-  ],
+  "maintainers": [{
+    "email": "allanyu@tencent.com",
+    "name": "allanyu"
+  }],
   "dependencies": {
     "co": "^4.6.0",
     "deprecate": "^0.1.0",

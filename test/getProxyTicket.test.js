@@ -1,73 +1,71 @@
-require('es6-promise').polyfill();
-
-var casServer = require('./lib/casServer');
-var Express = require('express');
-var http = require('http');
-
-var url = require('url');
-
-var expect = require('chai').expect;
-
-var casServerFactory = require('./lib/casServer');
-var casClientFactory = require('./lib/casClientFactory');
-
-var utils = require('../lib/utils');
-
-var handleCookies = require('./lib/handleCookie');
+import Koa from 'koa';
+import {
+  expect,
+} from 'chai';
+import casServerFactory from './lib/casServer';
+import casClientFactory from './lib/casClientFactory';
+import utils from '../lib/utils';
+import handleCookies from './lib/handleCookie';
+import {
+  logger,
+} from './lib/test-utils';
+import supertest from 'supertest';
 
 describe('能够正确获取proxy ticket', function() {
 
-  var casClientApp, casClientServer, casServerApp, casServer,
-    localhost = 'http://localhost',
-    casPort = '3004',
-    clientPort = '3002',
-    casRootPath = localhost + ':' + casPort,
-    clientPath = localhost + ':' + clientPort,
-    hookBeforeCasConfig, hookAfterCasConfig;
+  const localhost = 'http://127.0.0.1';
+  const casPort = 3004;
+  const clientPort = 3002;
+  const serverPath = `${localhost}:${casPort}`;
+  const clientPath = `${localhost}:${clientPort}`;
+
+  let casClientApp;
+  let casClientServer;
+  let casServerApp;
+  let casServer;
+  let request;
+  let serverRequest;
+  let hookBeforeCasConfig;
+  let hookAfterCasConfig;
 
   beforeEach(function(done) {
 
-    casServerApp = new Express();
-
+    casServerApp = new Koa();
     casServerFactory(casServerApp);
 
-    casServer = http.createServer(casServerApp);
-
-    casClientApp = new Express();
-
+    casClientApp = new Koa();
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
-      serverPath: casRootPath,
-      logger: function(req, type) {
-        return function() {
-        };
-      }
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookBeforeCasConfig === 'function') {
-          hookBeforeCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookAfterCasConfig === 'function') {
-          hookAfterCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
+      serverPath,
+      logger,
+    }, {
+      beforeCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookBeforeCasConfig === 'function') {
+            return yield hookBeforeCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
+      afterCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookAfterCasConfig === 'function') {
+            return yield hookAfterCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
     });
 
-    casClientServer = http.createServer(casClientApp);
-
-    casServer.listen(3004, function(err) {
+    casServer = casServerApp.listen(casPort, (err) => {
       if (err) throw err;
 
-      casClientServer.listen(3002, function(err) {
+      serverRequest = supertest.agent(casServerApp.listen());
+      casClientServer = casClientApp.listen(clientPort, (err) => {
         if (err) throw err;
-
+        request = supertest.agent(casClientApp.listen());
         done();
       });
     });
@@ -82,25 +80,57 @@ describe('能够正确获取proxy ticket', function() {
   });
 
   it('登陆成功后能够成功获取pt', function(done) {
-    hookAfterCasConfig = function(req, res, next) {
-      if (req.path === '/') {
-        req.getProxyTicket('xxx', function(err, pt) {
-          if (err) throw err;
-
-          res.send(pt);
-        })
+    hookAfterCasConfig = function* (ctx, next) {
+      if (ctx.path === '/') {
+        const pt = ctx.request.getProxyTicket('xxx');
+        ctx.body = pt;
       } else {
-        next();
+        yield next;
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`)
+      .expect(302)
+      .end((err, res) => {
+
+        const redirectLocation = res.header.location;
+        let cookies;
+
+        request.get(redirectLocation)
+          .expect(302)
+          .end((err, res) => {
+
+            cookies = handleCookies.setCookies(res.header);
+            expect(res.header.location).to.equal('/');
+
+            request.get('/')
+              .set('Cookie', handleCookies.getCookies(cookies))
+              .expect(200)
+              .end((err, res) => {
+
+              });
+
+            utils.getRequest(`${clientPath}/`, {
+              headers: {
+                Cookie: handleCookies.getCookies(cookies),
+              },
+            }, function(err, response) {
+              if (err) throw err;
+
+              expect(response.status).to.equal(200);
+              expect(response.body).to.not.be.empty;
+
+              done();
+            });
+          });
+      });
+    utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -110,10 +140,10 @@ describe('能够正确获取proxy ticket', function() {
         expect(response.status).to.equal(302);
         expect(response.header.location).to.equal('/');
 
-        utils.getRequest(clientPath + '/', {
+        utils.getRequest(`${clientPath}/`, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
@@ -121,9 +151,9 @@ describe('能够正确获取proxy ticket', function() {
           expect(response.body).to.not.be.empty;
 
           done();
-        })
+        });
       });
-    })
+    });
   });
 
   it('登陆成功后能够成功获取pt,使用缓存, 再次请求的pt应与上一次相同', function(done) {
@@ -133,19 +163,19 @@ describe('能够正确获取proxy ticket', function() {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else {
         next();
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -155,22 +185,22 @@ describe('能够正确获取proxy ticket', function() {
         expect(response.status).to.equal(302);
         expect(response.header.location).to.equal('/');
 
-        utils.getRequest(clientPath + '/', {
+        utils.getRequest(`${clientPath}/`, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(200);
           expect(response.body).to.not.be.empty;
 
-          var pt = response.body;
+          const pt = response.body;
 
-          utils.getRequest(clientPath + '/', {
+          utils.getRequest(`${clientPath}/`, {
             headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
+              Cookie: handleCookies.getCookies(cookies),
+            },
           }, function(err, response) {
             if (err) throw err;
 
@@ -180,10 +210,10 @@ describe('能够正确获取proxy ticket', function() {
             expect(response.body).to.equal(pt);
 
             done();
-          })
-        })
+          });
+        });
       });
-    })
+    });
   });
 
   it('登陆成功后能够成功获取pt,使用缓存, 但是设置disableCache, 再次请求的pt应与上一次不同', function(done) {
@@ -193,33 +223,33 @@ describe('能够正确获取proxy ticket', function() {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else if (req.path === '/noCache') {
         req.getProxyTicket('xxx', {
-          disableCache: true
+          disableCache: true,
         }, function(err, pt) {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else if (req.path === '/noCache/old') {
         req.getProxyTicket('xxx', true, function(err, pt) {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else {
         next();
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -229,22 +259,22 @@ describe('能够正确获取proxy ticket', function() {
         expect(response.status).to.equal(302);
         expect(response.header.location).to.equal('/');
 
-        utils.getRequest(clientPath + '/', {
+        utils.getRequest(`${clientPath}/`, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(200);
           expect(response.body).to.not.be.empty;
 
-          var pt = response.body;
+          const pt = response.body;
 
-          utils.getRequest(clientPath + '/noCache', {
+          utils.getRequest(`${clientPath}/noCache`, {
             headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
+              Cookie: handleCookies.getCookies(cookies),
+            },
           }, function(err, response) {
             if (err) throw err;
 
@@ -253,10 +283,10 @@ describe('能够正确获取proxy ticket', function() {
 
             expect(response.body).to.not.equal(pt);
 
-            utils.getRequest(clientPath + '/noCache/old', {
+            utils.getRequest(`${clientPath}/noCache/old`, {
               headers: {
-                Cookie: handleCookies.getCookies(cookies)
-              }
+                Cookie: handleCookies.getCookies(cookies),
+              },
             }, function(err, response) {
               if (err) throw err;
 
@@ -266,11 +296,11 @@ describe('能够正确获取proxy ticket', function() {
               expect(response.body).to.not.equal(pt);
 
               done();
-            })
-          })
-        })
+            });
+          });
+        });
       });
-    })
+    });
   });
 
   it('登陆成功后能够成功获取pt,使用缓存, 设置renew, 再次请求的pt应与上一次不同, 再下一次与上一次相同', function(done) {
@@ -280,27 +310,27 @@ describe('能够正确获取proxy ticket', function() {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else if (req.path === '/renew') {
         req.getProxyTicket('xxx', {
-          renew: true
+          renew: true,
         }, function(err, pt) {
           if (err) throw err;
 
           res.send(pt);
-        })
+        });
       } else {
         next();
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -310,22 +340,22 @@ describe('能够正确获取proxy ticket', function() {
         expect(response.status).to.equal(302);
         expect(response.header.location).to.equal('/');
 
-        utils.getRequest(clientPath + '/', {
+        utils.getRequest(`${clientPath}/`, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(200);
           expect(response.body).to.not.be.empty;
 
-          var pt = response.body;
+          let pt = response.body;
 
-          utils.getRequest(clientPath + '/', {
+          utils.getRequest(`${clientPath}/`, {
             headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
+              Cookie: handleCookies.getCookies(cookies),
+            },
           }, function(err, response) {
             if (err) throw err;
 
@@ -334,10 +364,10 @@ describe('能够正确获取proxy ticket', function() {
 
             expect(response.body).to.equal(pt);
 
-            utils.getRequest(clientPath + '/renew', {
+            utils.getRequest(`${clientPath}/renew`, {
               headers: {
-                Cookie: handleCookies.getCookies(cookies)
-              }
+                Cookie: handleCookies.getCookies(cookies),
+              },
             }, function(err, response) {
               if (err) throw err;
 
@@ -348,10 +378,10 @@ describe('能够正确获取proxy ticket', function() {
 
               pt = response.body;
 
-              utils.getRequest(clientPath + '/', {
+              utils.getRequest(`${clientPath}/`, {
                 headers: {
-                  Cookie: handleCookies.getCookies(cookies)
-                }
+                  Cookie: handleCookies.getCookies(cookies),
+                },
               }, function(err, response) {
                 if (err) throw err;
 
@@ -360,17 +390,17 @@ describe('能够正确获取proxy ticket', function() {
 
                 expect(response.body).to.equal(pt);
                 done();
-              })
-            })
+              });
+            });
 
-          })
-        })
+          });
+        });
       });
-    })
+    });
   });
 
   it('登陆成功后能够成功获取pt,不使用缓存, 再次请求的pt应与上一次不同', function(done) {
-    var cookies = {};
+    const cookies = {};
 
     casClientServer.close(function(err) {
       if (err) throw err;
@@ -379,14 +409,13 @@ describe('能够正确获取proxy ticket', function() {
 
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         cache: {
-          enable: false
+          enable: false,
         },
-        logger: function(req, type) {
-          return function() {
-          };
-        }
+        logger(req, type) {
+          return function() {};
+        },
       });
 
       casClientApp.get('/getPt', function(req, res) {
@@ -402,13 +431,13 @@ describe('能够正确获取proxy ticket', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
-          var cookies;
+          const redirectLocation = response.header.location;
+          let cookies;
 
           utils.getRequest(redirectLocation, function(err, response) {
             if (err) throw err;
@@ -418,22 +447,22 @@ describe('能够正确获取proxy ticket', function() {
             expect(response.status).to.equal(302);
             expect(response.header.location).to.equal('/');
 
-            utils.getRequest(clientPath + '/getPt', {
+            utils.getRequest(`${clientPath}/getPt`, {
               headers: {
-                Cookie: handleCookies.getCookies(cookies)
-              }
+                Cookie: handleCookies.getCookies(cookies),
+              },
             }, function(err, response) {
               if (err) throw err;
 
               expect(response.status).to.equal(200);
               expect(response.body).to.not.be.empty;
 
-              var pt = response.body;
+              const pt = response.body;
 
-              utils.getRequest(clientPath + '/getPt', {
+              utils.getRequest(`${clientPath}/getPt`, {
                 headers: {
-                  Cookie: handleCookies.getCookies(cookies)
-                }
+                  Cookie: handleCookies.getCookies(cookies),
+                },
               }, function(err, response) {
                 if (err) throw err;
 
@@ -443,10 +472,10 @@ describe('能够正确获取proxy ticket', function() {
                 expect(response.body).to.not.equal(pt);
 
                 done();
-              })
-            })
+              });
+            });
           });
-        })
+        });
 
 
       });
@@ -461,15 +490,14 @@ describe('能够正确获取proxy ticket', function() {
 
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         cache: {
           enable: true,
-          ttl: 500
+          ttl: 500,
         },
-        logger: function(req, type) {
-          return function() {
-          };
-        }
+        logger(req, type) {
+          return function() {};
+        },
       });
 
       casClientApp.get('/getPt', function(req, res) {
@@ -485,13 +513,13 @@ describe('能够正确获取proxy ticket', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
-          var cookies;
+          const redirectLocation = response.header.location;
+          let cookies;
 
           utils.getRequest(redirectLocation, function(err, response) {
             if (err) throw err;
@@ -501,21 +529,21 @@ describe('能够正确获取proxy ticket', function() {
             expect(response.status).to.equal(302);
             expect(response.header.location).to.equal('/');
 
-            utils.getRequest(clientPath + '/getPt', {
+            utils.getRequest(`${clientPath}/getPt`, {
               headers: {
-                Cookie: handleCookies.getCookies(cookies)
-              }
+                Cookie: handleCookies.getCookies(cookies),
+              },
             }, function(err, response) {
               if (err) throw err;
 
               expect(response.status).to.equal(200);
 
-              var pt = response.body;
+              const pt = response.body;
 
-              utils.getRequest(clientPath + '/getPt', {
+              utils.getRequest(`${clientPath}/getPt`, {
                 headers: {
-                  Cookie: handleCookies.getCookies(cookies)
-                }
+                  Cookie: handleCookies.getCookies(cookies),
+                },
               }, function(err, response) {
                 if (err) throw err;
 
@@ -525,10 +553,10 @@ describe('能够正确获取proxy ticket', function() {
 
                 setTimeout(function() {
 
-                  utils.getRequest(clientPath + '/getPt', {
+                  utils.getRequest(`${clientPath}/getPt`, {
                     headers: {
-                      Cookie: handleCookies.getCookies(cookies)
-                    }
+                      Cookie: handleCookies.getCookies(cookies),
+                    },
                   }, function(err, response) {
                     if (err) throw err;
 
@@ -537,13 +565,13 @@ describe('能够正确获取proxy ticket', function() {
                     expect(response.body).to.not.equal(pt);
 
                     done();
-                  })
+                  });
 
                 }, 1000);
-              })
-            })
+              });
+            });
           });
-        })
+        });
       });
     });
   });
@@ -556,24 +584,23 @@ describe('能够正确获取proxy ticket', function() {
 
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         cache: {
           filter: [
             'http://specialPath1.com',
             /http:\/\/specialPath2\.com/,
             function(path, req) {
-              return path.indexOf('http://specialPath3.com') > -1
-            }
-          ]
+              return path.indexOf('http://specialPath3.com') > -1;
+            },
+          ],
         },
-        logger: function(req, type) {
-          return function() {
-          };
-        }
+        logger(req, type) {
+          return function() {};
+        },
       });
 
       casClientApp.get('/getPt', function(req, res) {
-        var targetService = ''
+        let targetService = '';
         if (req.query && req.query.targetService) {
           targetService = req.query.targetService;
         }
@@ -589,13 +616,13 @@ describe('能够正确获取proxy ticket', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
-          var cookies;
+          const redirectLocation = response.header.location;
+          let cookies;
 
           utils.getRequest(redirectLocation, function(err, response) {
             if (err) throw err;
@@ -605,16 +632,16 @@ describe('能够正确获取proxy ticket', function() {
             expect(response.status).to.equal(302);
             expect(response.header.location).to.equal('/');
 
-            var testTargetServiceArr = ['xxx', 'http://specialPath1.com', 'http://specialPath2.com', 'http://specialPath3.com'];
+            const testTargetServiceArr = [ 'xxx', 'http://specialPath1.com', 'http://specialPath2.com', 'http://specialPath3.com' ];
 
-            var pts = {};
+            const pts = {};
 
             function queryPt(targetService) {
               return new Promise(function(resolve, reject) {
-                utils.getRequest(clientPath + '/getPt?targetService=' + encodeURIComponent(targetService), {
+                utils.getRequest(`${clientPath}/getPt?targetService=${encodeURIComponent(targetService)}`, {
                   headers: {
-                    Cookie: handleCookies.getCookies(cookies)
-                  }
+                    Cookie: handleCookies.getCookies(cookies),
+                  },
                 }, function(err, response) {
                   if (err) return reject(err);
                   resolve(response);
@@ -678,7 +705,7 @@ describe('能够正确获取proxy ticket', function() {
                 throw err;
               });
           });
-        })
+        });
 
 
       });

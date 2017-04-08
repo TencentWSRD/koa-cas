@@ -16,20 +16,7 @@ export const hooks = {
 export const logger = hideLog ? null : (req, type) => {
   switch (type) { // cas日志不用那么详细, 有问题后再打开
     case 'access':
-      return (log) => {
-        const m = log.match(/\|(\w+)\|([^|]+)\|(\d+)\|(\d+)/i);
-        if (m) {
-          const [ , , apiName, status, costTime ] = m;
-          req.ppReport({
-            serviceName: 'CAS',
-            apiName,
-            success: status >= 200 && status <= 309,
-            costTime,
-          });
-        } else {
-          console.error(`CAS access log ${log} not match regex!`);
-        }
-      };
+      return console.log.bind(console);
     case 'log':
     case 'debug':
     case 'info':

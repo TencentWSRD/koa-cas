@@ -138,41 +138,40 @@ class ConnectCas {
        * @param {Function}  callback
        * @returns {*}
        */
-      req.getProxyTicket = function(targetService, proxyOptions) {
-        return co.wrap(function* () {
-          if (typeof proxyOptions === 'function') {
-            proxyOptions = { // eslint-disable-line no-param-reassign
-              disableCache: false,
-            };
-          } else if (typeof proxyOptions === 'boolean') {
-            proxyOptions = { // eslint-disable-line no-param-reassign
-              disableCache: proxyOptions,
-            };
-          }
+      req.getProxyTicket = co.wrap(function* (targetService, proxyOptions = {}) {
+        if (typeof proxyOptions === 'function') {
+          proxyOptions = { // eslint-disable-line no-param-reassign
+            disableCache: false,
+          };
+        } else if (typeof proxyOptions === 'boolean') {
+          proxyOptions = { // eslint-disable-line no-param-reassign
+            disableCache: proxyOptions,
+          };
+        }
 
-          proxyOptions.targetService = targetService;
-          if (!options.paths.proxyCallback) {
-            logger.warn('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
-            throw new Error('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
-          }
+        proxyOptions.targetService = targetService;
+        if (!options.paths.proxyCallback) {
+          logger.warn('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
+          throw new Error('options.paths.proxyCallback is not set, CAS is on non-proxy mode, you should not request a proxy ticket for non-proxy mode!');
+        }
 
-          let restletIntegrateParams;
-          if (matchedRestletIntegrateRule) {
-            if (is.function(options.restletIntegration[matchedRestletIntegrateRule].params)) {
-              logger.info('Match restlet integration rule and using aync manner, whitch using function to return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
-              restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params(req);
-            } else {
-              logger.info('Match restlet integration rule and using default manner, whitch just directly return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
-              restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params;
-            }
+        let restletIntegrateParams;
+        if (matchedRestletIntegrateRule) {
+          if (is.function(options.restletIntegration[matchedRestletIntegrateRule].params)) {
+            logger.info('Match restlet integration rule and using aync manner, whitch using function to return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
+            restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params(ctx);
+          } else {
+            logger.info('Match restlet integration rule and using default manner, whitch just directly return `object`, to get restlet integration params: ', matchedRestletIntegrateRule);
+            restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params;
           }
-          return matchedRestletIntegrateRule ? yield getProxyTicketThroughRestletReq.call(that, req, targetService, {
-            name: matchedRestletIntegrateRule,
-            params: restletIntegrateParams,
-            cache: options.restletIntegrationIsUsingCache,
-          }) : yield getProxyTicket.call(that, req, proxyOptions);
-        });
-      };
+        }
+        const pt = matchedRestletIntegrateRule ? yield getProxyTicketThroughRestletReq.call(that, ctx, targetService, {
+          name: matchedRestletIntegrateRule,
+          params: restletIntegrateParams,
+          cache: options.restletIntegrationIsUsingCache,
+        }) : yield getProxyTicket.call(that, ctx, proxyOptions);
+        return pt;
+      });
 
       const afterHook = options.hooks && is.function(options.hooks.after) ? options.hooks.after.bind(this, ctx, next) : () => Promise.resolve();
       if (matchedRestletIntegrateRule) {
@@ -205,7 +204,7 @@ class ConnectCas {
   logout() {
     const options = this.options;
 
-    return function* (ctx, next) {
+    return function* (ctx) {
       if (!ctx.session) {
         return ctx.redirect('/');
       }

@@ -267,13 +267,14 @@ module.exports = (app, options) => {
   router.post('/cas/v1/tickets', function* () {
 
     const username = 'username';
-    const passworld = 'password';
-    const type = 8;
+    const password = 'password';
+    const type = '8';
     const body = this.request.body;
+    console.log('/cas/v1/tickets body: ', body);
     if (body &&
       body.username === username &&
-      body.type === type &&
-      body.password === passworld) {
+      `${body.type}` === type &&
+      body.password === password) {
       const pgtId = uuid.v4();
       tgts[pgtId] = initTgt();
       this.body = getRestletIntegrationPGT(pgtId);
