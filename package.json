@@ -7,7 +7,7 @@
   "homepage": "https://github.com/allanfish/koa-cas",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/allanyu/koa-cas.git"
+    "url": "git+https://github.com/allanfish/koa-cas.git"
   },
   "engines": {
     "node": ">=6.0.0"
@@ -21,8 +21,8 @@
     "url": "https://github.com/allanfish/koa-cas/issues"
   },
   "maintainers": [{
-    "email": "allanyu@tencent.com",
-    "name": "allanyu"
+    "email": "googleyufei@qq.com",
+    "name": "allanfish"
   }],
   "dependencies": {
     "co": "^4.6.0",

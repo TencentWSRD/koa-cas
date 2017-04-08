@@ -11,6 +11,7 @@ import json from 'koa-json';
 import uuid from 'uuid';
 import utils from '../../lib/utils';
 import url from 'url';
+import qs from 'querystring';
 
 // var st = uuid.v4();
 // var pgtIou = 'PGTIOU-3-cyz9mq6SaNYsGXj7BEO2-login.rdm.org';
@@ -174,7 +175,6 @@ module.exports = (app, options) => {
         this.body = getFailResponse('xxx');
         return;
       }
-      console.log('1');
       const ticket = this.query.ticket;
       const service = this.query.service;
       let finded = false;
@@ -203,15 +203,10 @@ module.exports = (app, options) => {
       const pgtIou = uuid.v4();
 
       if (this.query.pgtUrl) {
-        console.log('cas server: sending request to ', this.query.pgtUrl);
+        const proxyCallbackUrl = `${this.query.pgtUrl}?${qs.stringify({ pgtId: tgtId, pgtIou })}`;
+        console.log('cas server: sending request to proxyCallback, url=', proxyCallbackUrl);
         try {
-          const response = yield utils.getRequest(this.query.pgtUrl, {
-            params: {
-              pgtId: tgtId,
-              pgtIou,
-            },
-          });
-          console.log('response: ', response);
+          yield utils.getRequest(proxyCallbackUrl);
           this.body = getSuccessResponse(pgtIou);
           return;
         } catch (err) {

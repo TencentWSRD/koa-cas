@@ -90,8 +90,8 @@ class ConnectCas {
     const options = this.options;
     const that = this;
     return function* coreMiddleware(next) {
+      console.log('CasClient start...');
       const ctx = this;
-      const req = this.request;
       if (!ctx.sessionStore) throw new Error('You must setup a session store before you can use CAS client!');
       if (!ctx.session) throw new Error(`Unexpected ctx.session ${ctx.session}`);
 
@@ -99,7 +99,7 @@ class ConnectCas {
         yield options.hooks.before(this, next);
       }
 
-      const logger = utils.getLogger(req, options);
+      const logger = utils.getLogger(ctx, options);
       const pathname = this.path;
       const method = this.method;
 
@@ -109,14 +109,14 @@ class ConnectCas {
         if (!options.paths.restletIntegration) {
           logger.warn('options.restletIntegration is set, but options.paths.restletIntegration is undefined! Maybe you forget to set all your paths.');
         } else {
-          req.clearRestlet = co.wrap(function* () {
+          ctx.request.clearRestlet = co.wrap(function* () {
             return yield clearRestletTGTs.bind(null, options, logger);
           });
 
           for (const i in options.restletIntegration) {
             if (options.restletIntegration[i] &&
               is.function(options.restletIntegration[i].trigger) &&
-              options.restletIntegration[i].trigger(req)) {
+              options.restletIntegration[i].trigger(ctx)) {
               matchedRestletIntegrateRule = i;
               break;
             }
@@ -131,14 +131,14 @@ class ConnectCas {
        *                                              Otherwise, whether to use cache or not depending on the options.cache.enable
        * @param {String}    proxyOptions.targetService   (Required)
        * @param {Boolean}   proxyOptions.disableCache    Whether to force disable cache and to request a new one.
-       * @param {String}    proxyOptions.specialPgt      Use this pgt to request a PT, instead of req.session.cas.pgt
+       * @param {String}    proxyOptions.specialPgt      Use this pgt to request a PT, instead of ctx.session.cas.pgt
        * @param {Boolean}   proxyOptions.renew           Don't use cache, request a new one, reset it to cache
        * @param {Function}  proxyOptions.retryHandler    When trying to fetch a PT failed due to authentication issue, this callback will be called, it will receive one param `error`, which introduce the fail reason.
        *                                                 Be careful when you setting up this option because it might occur an retry loop.
        * @param {Function}  callback
        * @returns {*}
        */
-      req.getProxyTicket = co.wrap(function* (targetService, proxyOptions = {}) {
+      ctx.request.getProxyTicket = co.wrap(function* (targetService, proxyOptions = {}) {
         if (typeof proxyOptions === 'function') {
           proxyOptions = { // eslint-disable-line no-param-reassign
             disableCache: false,
@@ -180,7 +180,7 @@ class ConnectCas {
         return yield next;
       }
 
-      if (utils.shouldIgnore(req, options)) {
+      if (utils.shouldIgnore(ctx, options)) {
         yield afterHook();
         return yield next;
       }
