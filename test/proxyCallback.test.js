@@ -1,147 +1,127 @@
-var casServer = require('./lib/casServer');
-var Express = require('express');
-var http = require('http');
-
-var url = require('url');
-
-var expect = require('chai').expect;
-
-var casServerFactory = require('./lib/casServer');
-var casClientFactory = require('./lib/casClientFactory');
-
-var utils = require('../lib/utils');
-
-var handleCookies = require('./lib/handleCookie');
+import Koa from 'koa';
+import co from 'co';
+import supertest from 'supertest';
+import {
+  logger, hooks,
+} from './lib/test-utils';
+import { expect } from 'chai';
+import casServerFactory from './lib/casServer';
+import casClientFactory from './lib/casClientFactory';
+import handleCookies from './lib/handleCookie';
 
 describe('proxyCallback符合预期', function() {
-  var casClientApp, casClientServer, casServerApp, casServer,
-    localhost = 'http://localhost',
-    casPort = '3004',
-    clientPort = '3002',
-    casRootPath = localhost + ':' + casPort,
-    clientPath = localhost + ':' + clientPort,
-    hookBeforeCasConfig, hookAfterCasConfig;
+
+  const localhost = 'http://127.0.0.1';
+  const casPort = 3004;
+  const clientPort = 3002;
+  const serverPath = `${localhost}:${casPort}`;
+  const clientPath = `${localhost}:${clientPort}`;
+
+  let casClientApp;
+  let casClientServer;
+  let casServerApp;
+  let casServer;
+  let request;
+  let hookBeforeCasConfig;
+  let hookAfterCasConfig;
 
   beforeEach(function(done) {
 
-    casServerApp = new Express();
-
+    casServerApp = new Koa();
     casServerFactory(casServerApp);
 
-    casServer = http.createServer(casServerApp);
-
-    casClientApp = new Express();
-
+    casClientApp = new Koa();
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
-      serverPath: casRootPath,
-      hooks: {
-        before: function(req, res, next) {
-          req.start = Date.now();
-          next();
-        },
-        after: function(req, res, next) {
-          expect(req.start).to.not.be.empty;
-          next();
-        }
+      serverPath,
+      logger,
+      hooks,
+    }, {
+      beforeCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookBeforeCasConfig === 'function') {
+            return yield hookBeforeCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
       },
-      logger: function(req, type) {
-        return function() {
-        };
-      }
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookBeforeCasConfig === 'function') {
-          hookBeforeCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookAfterCasConfig === 'function') {
-          hookAfterCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
+      afterCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookAfterCasConfig === 'function') {
+            return yield hookAfterCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
     });
 
-    casClientServer = http.createServer(casClientApp);
+    co(function* () {
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      console.log(`casServer listen ${casPort}`);
 
-    casServer.listen(3004, function(err) {
-      if (err) throw err;
-
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
-
-        done();
-      });
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      console.log(`casClientServer listen ${clientPort}`);
+      request = supertest.agent(casClientApp.listen());
+      done();
     });
   });
 
   afterEach(function(done) {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
-    casServer.close();
-    casClientServer.close();
-    done();
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      done();
+    });
   });
 
   it('啥参数都不带直接调用, 或是参数不合法(无pgtIou或pgtId) 直接响应200', function(done) {
-    utils.getRequest(clientPath + '/cas/proxyCallback', function(err, response) {
-      if (err) throw err;
-      expect(response.status).to.equal(200);
-
-      utils.getRequest(clientPath + '/cas/proxyCallback?pgtIou=xxx', function(err, response) {
-        if (err) throw err;
-        expect(response.status).to.equal(200);
-
-        utils.getRequest(clientPath + '/cas/proxyCallback?pgtId=xxx', function(err, response) {
-          if (err) throw err;
-          expect(response.status).to.equal(200);
-
-          done();
-        });
-      })
-    })
+    hookAfterCasConfig = function* (ctx, next) {
+      if (ctx.path === '/cas/proxyCallback') {
+        const { pgtIou } = ctx.query;
+        if (pgtIou) {
+          const pgtInfo = yield ctx.sessionStore.get(pgtIou);
+          expect(pgtInfo).to.be.empty;
+        }
+      } else {
+        yield next;
+      }
+    };
+    co(function* () {
+      yield request.get('/cas/proxyCallback').expect(200);
+      yield request.get('/cas/proxyCallback?pgtIou=xxx').expect(200);
+      yield request.get('/cas/proxyCallback?pgtId=xxx').expect(200);
+      done();
+    }).catch(done);
   });
 
   it('传入pgtId/pgtIou, 能够正确存入, 并能通过pgtIou找到pgtId', function(done) {
 
-    var fakePgtIou = 'pgtIou',
-      fakePgtId = 'pgtId';
+    const fakePgtIou = 'pgtIou';
+    const fakePgtId = 'pgtId';
 
-    hookBeforeCasConfig = function(req, res, next) {
-      if (req.path == '/get') {
-        expect(req.query.pgtIou).to.not.be.empty;
-        req.sessionStore.get(req.query.pgtIou, function(err, session) {
-          if (err) throw err;
-
-          expect(session.pgtId).to.equal(fakePgtId);
-          done();
-        })
+    hookBeforeCasConfig = function*(ctx, next) {
+      if (ctx.path === '/get') {
+        expect(ctx.query.pgtIou).to.not.be.empty;
+        const session = yield ctx.sessionStore.get(ctx.query.pgtIou);
+        ctx.body = session.pgtId;
       } else {
-        next();
+        yield next;
       }
     };
 
-    utils.getRequest(clientPath + '/cas/proxyCallback?pgtIou=' + fakePgtIou + '&pgtId=' + fakePgtId, function(err, response) {
-      if (err) throw err;
+    co(function* () {
+      let res = yield request.get(`/cas/proxyCallback?pgtIou=${fakePgtIou}&pgtId=${fakePgtId}`).expect(200);
+      const cookies = handleCookies.setCookies(res.header);
 
-      expect(response.status).to.equal(200);
-      var cookies = handleCookies.setCookies(response.header);
-
-      utils.getRequest(clientPath + '/get?pgtIou=' + fakePgtIou, {
-        headers: {
-          Cookie: handleCookies.getCookies(cookies)
-        }
-      }, function(err, response) {
-        if (err) throw err;
-      });
-
+      res = yield request.get(`/get?pgtIou=${fakePgtIou}`).set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      const pgtId = res.text;
+      expect(pgtId).to.equal(fakePgtId);
+      done();
     });
-
   });
 
 });

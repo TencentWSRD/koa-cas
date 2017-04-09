@@ -1,346 +1,201 @@
-var Express = require('express');
-var http = require('http');
-var url = require('url');
-var session = require('express-session');
-var bodyParser = require('body-parser');
-var cookieParser = require('cookie-parser');
-var MemoryStore = require('session-memory-store');
-
-var expect = require('chai').expect;
-
-var casClientFactory = require('./lib/casClientFactory');
-
-var utils = require('../lib/utils');
-
-var PTStore = require('../lib/ptStroe');
-
-var handleCookies = require('./lib/handleCookie');
+import Koa from 'koa';
+import co from 'co';
+import supertest from 'supertest';
+import {
+  logger, hooks,
+} from './lib/test-utils';
+import { expect } from 'chai';
+import casClientFactory from './lib/casClientFactory';
+import PTStore from '../lib/ptStroe';
+import handleCookies from './lib/handleCookie';
 
 describe('PTStore功能正常', function() {
 
-  var app, server, ptStore, logger,
-    localhost = 'http://localhost:3004',
-    ptKey = 'key',
-    ptValue = 'I am a pt';
+  const localhost = 'http://127.0.0.1';
+  const casPort = 3004;
+  const clientPort = 3002;
+  const serverPath = `${localhost}:${casPort}`;
+  const clientPath = `${localhost}:${clientPort}`;
+  const ptKey = 'key';
+  const ptValue = 'I am a pt';
+
+  let casClientApp;
+  let casClientServer;
+  let request;
+  let hookBeforeCasConfig;
+  let hookAfterCasConfig;
+  let ptStore;
 
   beforeEach(function(done) {
-    app = new Express();
 
-    app.use(bodyParser.json());
-    app.use(bodyParser.urlencoded({ extended: true }));
-    app.use(cookieParser('here is some secret'));
+    casClientApp = new Koa();
+    casClientFactory(casClientApp, {
+      servicePrefix: clientPath,
+      serverPath,
+      logger,
+      hooks,
+    }, {
+      beforeCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookBeforeCasConfig === 'function') {
+            return yield hookBeforeCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
+      afterCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookAfterCasConfig === 'function') {
+            return yield hookAfterCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
+    });
 
-    var MemoryStore = require('session-memory-store')(session);
-
-    app.use(session({
-      resave: true,
-      saveUninitialized: true,
-      secret: 'I am a secret',
-      name: 'jssessionid',
-      store: new MemoryStore()
-    }));
-
-    logger = function() {
-      return function() {
-      };
+    hookBeforeCasConfig = function* (ctx, next) {
+      ctx.sessionSave = true; // 确保创建一个session, 在cookie中存储sessionid
+      switch (ctx.path) {
+        case '/get':
+          ctx.body = (yield ptStore.get(ctx, ptKey)) || '';
+          break;
+        case '/set':
+          ctx.body = (yield ptStore.set(ctx, ptKey, ptValue)) || '';
+          break;
+        case '/remove':
+          yield ptStore.remove(ctx, ptKey);
+          ctx.body = 'ok';
+          break;
+        case '/clear':
+          yield ptStore.clear(ctx);
+          ctx.body = 'ok';
+          break;
+        default:
+          return yield next;
+      }
     };
-    server = http.createServer(app);
 
-    server.listen(3004, function(err) {
-      if (err) throw err;
+    co(function* () {
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      console.log(`casClientServer listen ${clientPort}`);
+      request = supertest.agent(casClientApp.listen());
       done();
     });
   });
 
   afterEach(function(done) {
-    server.close(function(err) {
-      if (err) throw err;
+    hookAfterCasConfig = null;
+    hookBeforeCasConfig = null;
+    co(function* () {
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
       done();
-    })
+    });
   });
 
   it('未初始化, 直接get, remove, clear, 不会出现异常', function(done) {
     ptStore = new PTStore({
-      logger: logger
+      logger() {
+        return () => {};
+      },
     });
 
-    app.get('/get', function(req, res) {
-      ptStore.get(req, ptKey, function(err, value) {
-        if (err) throw err;
-        res.send(value);
-      });
+    co(function* () {
+      let res = yield request.get('/get').expect(200);
+      expect(res.text).to.be.empty;
+      const cookies = handleCookies.setCookies(res.header);
+
+      res = yield request.get('/remove').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+
+      res = yield request.get('/clear').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+      done();
     });
-
-    app.get('/remove', function(req, res) {
-      ptStore.remove(req, ptKey, function(err) {
-        if (err) throw err;
-        res.send('ok');
-      });
-    });
-
-    app.get('/clear', function(req, res) {
-      ptStore.clear(req, function(err) {
-        if (err) throw err;
-        res.send('ok');
-      });
-    });
-
-    var cookies;
-
-    utils.getRequest(localhost + '/get', function(err, response) {
-      if (err) throw err;
-
-      expect(response.status).to.equal(200);
-      expect(response.body).to.be.empty;
-
-      cookies = handleCookies.setCookies(response.header);
-
-      utils.getRequest(localhost + '/remove', {
-        headers: {
-          Cookie: handleCookies.getCookies(cookies)
-        }
-      }, function(err, response) {
-        if (err) throw err;
-
-        expect(response.status).to.equal(200);
-
-        // 获取
-        utils.getRequest(localhost + '/clear', {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(200);
-
-          done();
-        });
-      });
-    });
-
   });
 
   it('set后, 在过期时间内, 可以正常获取', function(done) {
-
     ptStore = new PTStore();
 
-    app.use(function(req, res, next) {
-      ptStore.set(req, ptKey, ptValue, function(err) {
-        if (err) throw err;
+    co(function* () {
+      let res = yield request.get('/set').expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
+      const cookies = handleCookies.setCookies(res.header);
 
-        next();
-      });
-    });
-
-    app.use(function(req, res, next) {
-      ptStore.get(req, ptKey, function(err, value) {
-        if (err) throw err;
-        expect(value).to.equal(ptValue);
-        next();
-      })
-    });
-
-    app.get('/', function(req, res) {
-      res.send('ok');
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
       done();
-    });
-
-    utils.getRequest(localhost, function(err, response) {
-      if (err) throw err;
-
-      expect(response.status).to.equal(200);
     });
   });
 
   it('set后, 立刻获取能够获取, 但超过过期时间, 无法获取', function(done) {
     ptStore = new PTStore({
-      ttl: 1000
+      ttl: 1000,
     });
 
-    app.get('/set', function(req, res) {
-      ptStore.set(req, ptKey, ptValue, function(err) {
-        if (err) throw err;
-        res.send('ok');
-      });
-    });
+    co(function* () {
+      let res = yield request.get('/set').expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
+      const cookies = handleCookies.setCookies(res.header);
 
-    app.get('/get', function(req, res) {
-      ptStore.get(req, ptKey, function(err, value) {
-        if (err) throw err;
-        res.send(value);
-      })
-    });
+      yield new Promise((r) => setTimeout(() => r(), 500));
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
 
-    var cookies = {};
+      yield new Promise((r) => setTimeout(() => r(), 1000));
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.be.empty;
 
-    utils.getRequest(localhost + '/set', function(err, response) {
-      if (err) throw err;
-
-      cookies = handleCookies.setCookies(response.header);
-
-      setTimeout(function() {
-        utils.getRequest(localhost + '/get', {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.body).to.equal(ptValue);
-
-          setTimeout(function() {
-            utils.getRequest(localhost + '/get', {
-              headers: {
-                Cookie: handleCookies.getCookies(cookies)
-              }
-            }, function(err, response) {
-              if (err) throw err;
-
-              expect(response.body.value).to.be.empty;
-
-              done();
-            });
-          }, 1000);
-
-        });
-      }, 500);
+      done();
     });
   });
 
   it('remove后, 无论存不存在都正常响应, 删除后get不到该pt', function(done) {
     ptStore = new PTStore();
 
-    app.get('/set', function(req, res) {
-      ptStore.set(req, ptKey, ptValue, function(err) {
-        if (err) throw err;
-        res.send('ok');
-      });
-    });
+    co(function* () {
+      let res = yield request.get('/set').expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
+      const cookies = handleCookies.setCookies(res.header);
 
-    app.get('/get', function(req, res) {
-      ptStore.get(req, ptKey, function(err, value) {
-        if (err) throw err;
-        res.send(value);
-      })
-    });
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
 
-    app.get('/remove', function(req, res) {
-      ptStore.remove(req, ptKey, function(err) {
-        if (err) throw err;
+      res = yield request.get('/remove').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.equal('ok');
 
-        res.send('ok');
-      });
-    });
-
-    var cookies = {};
-
-    // 设置
-    utils.getRequest(localhost + '/set', function(err, response) {
-      if (err) throw err;
-
-      cookies = handleCookies.setCookies(response.header);
-
-      // 获取
-      utils.getRequest(localhost + '/get', {
-        headers: {
-          Cookie: handleCookies.getCookies(cookies)
-        }
-      }, function(err, response) {
-        if (err) throw err;
-
-        // 应该能获取得到
-        expect(response.body).to.equal(ptValue);
-
-        // 删除
-        utils.getRequest(localhost + '/remove', {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
-        }, function(err, response) {
-          if (err) throw err;
-
-          // 删除
-          utils.getRequest(localhost + '/get', {
-            headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
-          }, function(err, response) {
-            if (err) throw err;
-
-            expect(response.body).to.be.empty;
-            done();
-          });
-        });
-      });
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.be.empty;
+      done();
     });
   });
 
   it('clear后, 啥都获取不到', function(done) {
     ptStore = new PTStore();
 
-    app.get('/set', function(req, res) {
-      ptStore.set(req, ptKey, ptValue, function(err) {
-        if (err) throw err;
-        res.send('ok');
-      });
-    });
+    co(function* () {
+      let res = yield request.get('/set').expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
+      const cookies = handleCookies.setCookies(res.header);
 
-    app.get('/get', function(req, res) {
-      ptStore.get(req, ptKey, function(err, value) {
-        if (err) throw err;
-        res.send(value);
-      })
-    });
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.not.be.empty;
+      expect(res.text).to.equal(ptValue);
 
-    app.get('/clear', function(req, res) {
-      ptStore.clear(req, function(err) {
-        if (err) throw err;
+      res = yield request.get('/clear').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.equal('ok');
 
-        res.send('ok');
-      });
-    });
-
-    var cookies = {};
-
-    // 设置
-    utils.getRequest(localhost + '/set', function(err, response) {
-      if (err) throw err;
-
-      cookies = handleCookies.setCookies(response.header);
-
-      // 获取
-      utils.getRequest(localhost + '/get', {
-        headers: {
-          Cookie: handleCookies.getCookies(cookies)
-        }
-      }, function(err, response) {
-        if (err) throw err;
-
-        // 应该能获取得到
-        expect(response.body).to.equal(ptValue);
-
-        // 删除
-        utils.getRequest(localhost + '/clear', {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
-        }, function(err, response) {
-          if (err) throw err;
-
-          // 删除
-          utils.getRequest(localhost + '/get', {
-            headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
-          }, function(err, response) {
-            if (err) throw err;
-
-            expect(response.body).to.be.empty;
-            done();
-          });
-        });
-      });
+      res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      expect(res.text).to.be.empty;
+      done();
     });
   });
 

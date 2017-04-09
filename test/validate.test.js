@@ -1,26 +1,20 @@
-var casServer = require('./lib/casServer');
-var Express = require('express');
-var http = require('http');
-
-var url = require('url');
-
-var expect = require('chai').expect;
-
-var casServerFactory = require('./lib/casServer');
-var casClientFactory = require('./lib/casClientFactory');
-
-var utils = require('../lib/utils');
-
-var handleCookies = require('./lib/handleCookie');
+import  Express  from 'express';
+import  http  from 'http';
+import  url  from 'url';
+import  expect  from 'chai'.expect;
+import  casServerFactory  from './lib/casServer';
+import  casClientFactory  from './lib/casClientFactory';
+import  utils  from '../lib/utils';
+import  handleCookies  from './lib/handleCookie';
 
 describe('validate是否符合预期', function() {
 
-  var casClientApp, casClientServer, casServerApp, casServer,
+  let casClientApp, casClientServer, casServerApp, casServer,
     localhost = 'http://localhost',
     casPort = '3004',
     clientPort = '3002',
-    casRootPath = localhost + ':' + casPort,
-    clientPath = localhost + ':' + clientPort,
+    casRootPath = `${localhost}:${casPort}`,
+    clientPath = `${localhost}:${clientPort}`,
     hookBeforeCasConfig, hookAfterCasConfig;
 
   beforeEach(function(done) {
@@ -36,20 +30,20 @@ describe('validate是否符合预期', function() {
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
       serverPath: casRootPath,
-      logger: function(req, type) {
+      logger(req, type) {
         return function() {
         };
       },
       hooks: {
-        before: function(req, res, next) {
+        before(req, res, next) {
           req.start = Date.now();
           next();
         },
-        after: function(req, res, next) {
+        after(req, res, next) {
           expect(req.start).to.not.be.empty;
           next();
-        }
-      }
+        },
+      },
     }, function(app) {
       app.use(function(req, res, next) {
         if (typeof hookBeforeCasConfig === 'function') {
@@ -91,7 +85,7 @@ describe('validate是否符合预期', function() {
 
   it('req.query中无ticket参数,302重定向到lastUrl', function(done) {
 
-    utils.getRequest(clientPath + '/cas/validate', function(err, response) {
+    utils.getRequest(`${clientPath}/cas/validate`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
@@ -102,13 +96,13 @@ describe('validate是否符合预期', function() {
   });
 
   it('req.query中带ticket参数,但是与session中的st一样, 302回lastUrl', function(done) {
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -120,17 +114,17 @@ describe('validate是否符合预期', function() {
 
         utils.getRequest(redirectLocation, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
           expect(response.header.location).to.equal('/');
           done();
-        })
+        });
       });
-    })
+    });
   });
 
   it('校验ticket请求失败,响应非200,返回401', function(done) {
@@ -140,7 +134,7 @@ describe('validate是否符合预期', function() {
       casServerApp = new Express();
 
       casServerFactory(casServerApp, {
-        expectStatus: 500
+        expectStatus: 500,
       });
 
       casServer = http.createServer(casServerApp);
@@ -148,12 +142,12 @@ describe('validate是否符合预期', function() {
       casServer.listen(3004, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           utils.getRequest(redirectLocation, function(err, response) {
             if (err) throw err;
@@ -161,7 +155,7 @@ describe('validate是否符合预期', function() {
             expect(response.status).to.equal(401);
             done();
           });
-        })
+        });
       });
     });
   });
@@ -173,7 +167,7 @@ describe('validate是否符合预期', function() {
       casServerApp = new Express();
 
       casServerFactory(casServerApp, {
-        expectStatusStr: 'invalid'
+        expectStatusStr: 'invalid',
       });
 
       casServer = http.createServer(casServerApp);
@@ -181,12 +175,12 @@ describe('validate是否符合预期', function() {
       casServer.listen(3004, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           expect(redirectLocation).to.not.be.empty;
 
@@ -196,7 +190,7 @@ describe('validate是否符合预期', function() {
             expect(response.status).to.equal(500);
             done();
           });
-        })
+        });
       });
     });
   });
@@ -208,7 +202,7 @@ describe('validate是否符合预期', function() {
       casServerApp = new Express();
 
       casServerFactory(casServerApp, {
-        expectStatusStr: 'fail'
+        expectStatusStr: 'fail',
       });
 
       casServer = http.createServer(casServerApp);
@@ -216,12 +210,12 @@ describe('validate是否符合预期', function() {
       casServer.listen(3004, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           expect(redirectLocation).to.not.be.empty;
 
@@ -231,14 +225,14 @@ describe('validate是否符合预期', function() {
             expect(response.status).to.equal(401);
             done();
           });
-        })
+        });
       });
     });
   });
 
   it('非代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,并直接302到lastUrl', function(done) {
 
-    var cookies = {};
+    const cookies = {};
 
     casClientServer.close(function(err) {
       if (err) throw err;
@@ -249,12 +243,12 @@ describe('validate是否符合预期', function() {
         servicePrefix: clientPath,
         serverPath: casRootPath,
         paths: {
-          proxyCallback: ''
+          proxyCallback: '',
         },
-        logger: function(req, type) {
+        logger(req, type) {
           return function() {
           };
-        }
+        },
 
       }, function(app) {
         app.use(function(req, res, next) {
@@ -274,12 +268,12 @@ describe('validate是否符合预期', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           expect(redirectLocation).to.not.be.empty;
 
@@ -293,32 +287,32 @@ describe('validate是否符合预期', function() {
             expect(response.header['set-cookie']).to.not.be.empty;
 
             response.header['set-cookie'].forEach(function(row) {
-              var cookieArr = row.split(';');
-              var keyValuePair = cookieArr[0].split('=');
+              const cookieArr = row.split(';');
+              const keyValuePair = cookieArr[0].split('=');
               cookies[keyValuePair[0]] = keyValuePair[1];
             });
 
             // console.log('cookies', cookies);
 
-            var lastUri = url.parse(response.header.location);
-            var lastUrl;
+            const lastUri = url.parse(response.header.location);
+            let lastUrl;
 
             if (!lastUri.protocal) {
               lastUrl = clientPath + response.header.location;
             }
 
             function makeCookieStr(cookies) {
-              var arr = [];
-              for (var i in cookies) {
-                arr.push(i + '=' + cookies[i]);
+              const arr = [];
+              for (const i in cookies) {
+                arr.push(`${i}=${cookies[i]}`);
               }
               return arr.join('; ');
             }
 
             utils.getRequest(lastUrl, {
               headers: {
-                Cookie: makeCookieStr(cookies)
-              }
+                Cookie: makeCookieStr(cookies),
+              },
             }, function(err, response) {
               if (err) throw err;
 
@@ -327,7 +321,7 @@ describe('validate是否符合预期', function() {
               done();
             });
           });
-        })
+        });
 
 
       });
@@ -348,13 +342,13 @@ describe('validate是否符合预期', function() {
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+    utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
       if (err) throw err;
 
       expect(response.status).to.equal(302);
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      const redirectLocation = response.header.location;
+      let cookies;
 
       utils.getRequest(redirectLocation, function(err, response) {
         if (err) throw err;
@@ -364,29 +358,29 @@ describe('validate是否符合预期', function() {
         expect(response.status).to.equal(302);
         expect(response.header.location).to.equal('/');
 
-        utils.getRequest(clientPath + '/', {
+        utils.getRequest(`${clientPath}/`, {
           headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
+            Cookie: handleCookies.getCookies(cookies),
+          },
         }, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(200);
           expect(response.body).to.not.be.empty;
-          var body = JSON.parse(response.body);
+          const body = JSON.parse(response.body);
 
           expect(body.user).to.not.be.empty;
           expect(body.st).to.not.be.empty;
           expect(body.pgt).to.not.be.empty;
 
           done();
-        })
+        });
       });
-    })
+    });
   });
 
   it('options.redirect工作正常', function(done) {
-    var cookies = {};
+    const cookies = {};
 
     casClientServer.close(function(err) {
       if (err) throw err;
@@ -401,15 +395,15 @@ describe('validate是否符合预期', function() {
         servicePrefix: clientPath,
         serverPath: casRootPath,
         paths: {
-          proxyCallback: ''
+          proxyCallback: '',
         },
-        redirect: function(req, res) {
+        redirect(req, res) {
           return '/helloworld';
         },
-        logger: function(req, type) {
+        logger(req, type) {
           return function() {
           };
-        }
+        },
       });
 
       casClientServer = http.createServer(casClientApp);
@@ -417,12 +411,12 @@ describe('validate是否符合预期', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           expect(redirectLocation).to.not.be.empty;
 
@@ -437,7 +431,7 @@ describe('validate是否符合预期', function() {
 
             done();
           });
-        })
+        });
       });
     });
   });
@@ -456,22 +450,22 @@ describe('validate是否符合预期', function() {
         servicePrefix: clientPath,
         serverPath: casRootPath,
         paths: {
-          proxyCallback: ''
+          proxyCallback: '',
         },
         hooks: {
-          before: function(req, res, next) {
+          before(req, res, next) {
             req.start = Date.now();
             next();
           },
-          after: function(req, res, next) {
+          after(req, res, next) {
             expect(req.start).to.not.be.empty;
             next();
-          }
+          },
         },
-        logger: function(req, type) {
+        logger(req, type) {
           return function() {
           };
-        }
+        },
       });
 
       casClientServer = http.createServer(casClientApp);
@@ -479,12 +473,12 @@ describe('validate是否符合预期', function() {
       casClientServer.listen(3002, function(err) {
         if (err) throw err;
 
-        utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
+        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
           if (err) throw err;
 
           expect(response.status).to.equal(302);
 
-          var redirectLocation = response.header.location;
+          const redirectLocation = response.header.location;
 
           expect(redirectLocation).to.not.be.empty;
 
@@ -499,9 +493,9 @@ describe('validate是否符合预期', function() {
 
             done();
           });
-        })
+        });
       });
     });
-  })
+  });
 
 });

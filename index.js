@@ -100,18 +100,20 @@ class ConnectCas {
       }
 
       const logger = utils.getLogger(ctx, options);
-      const pathname = this.path;
-      const method = this.method;
-
       let matchedRestletIntegrateRule;
 
       if (options.restletIntegration) {
         if (!options.paths.restletIntegration) {
           logger.warn('options.restletIntegration is set, but options.paths.restletIntegration is undefined! Maybe you forget to set all your paths.');
         } else {
-          ctx.request.clearRestlet = co.wrap(function* () {
+          ctx.clearRestlet = co.wrap(function* () {
             return yield clearRestletTGTs.bind(null, options, logger);
           });
+
+          ctx.request.clearRestlet = () => {
+            deprecate('ctx.request.clearRestlet is deprecated, please use \'ctx.clearResetlet\'');
+            return ctx.clearRestlet.apply(ctx, Array.from(arguments));
+          };
 
           for (const i in options.restletIntegration) {
             if (options.restletIntegration[i] &&
@@ -138,7 +140,7 @@ class ConnectCas {
        * @param {Function}  callback
        * @returns {*}
        */
-      ctx.request.getProxyTicket = co.wrap(function* (targetService, proxyOptions = {}) {
+      ctx.getProxyTicket = co.wrap(function* (targetService, proxyOptions = {}) {
         if (typeof proxyOptions === 'function') {
           proxyOptions = { // eslint-disable-line no-param-reassign
             disableCache: false,
@@ -173,9 +175,15 @@ class ConnectCas {
         return pt;
       });
 
+      ctx.request.getProxyTicket = () => {
+        deprecate('"ctx.request.getProxyTicket" is deprecated, please use "ctx.getProxyTicket"');
+        return ctx.getProxyTicket.apply(ctx, Array.from(arguments));
+      };
+
       const afterHook = options.hooks && is.function(options.hooks.after) ? options.hooks.after.bind(this, ctx, next) : () => Promise.resolve();
       if (matchedRestletIntegrateRule) {
         logger.info('Match restlet integration rule: ', matchedRestletIntegrateRule);
+        ctx.sessionSave = true; // generate a new session to keep sessionid in cookie
         yield afterHook();
         return yield next;
       }
@@ -184,9 +192,8 @@ class ConnectCas {
         yield afterHook();
         return yield next;
       }
-
-      if (method === 'GET') {
-        switch (pathname) {
+      if (this.method === 'GET') {
+        switch (this.path) {
           case options.paths.validate:
             return yield validate(ctx, afterHook, options);
           case that.proxyCallbackPathName:
@@ -194,7 +201,7 @@ class ConnectCas {
           default:
             break;
         }
-      } else if (method === 'POST' && pathname === options.paths.validate && options.slo) {
+      } else if (this.method === 'POST' && this.path === options.paths.validate && options.slo) {
         return yield slo(ctx, afterHook, options);
       }
       return yield authenticate(ctx, afterHook, next, options);
@@ -204,20 +211,20 @@ class ConnectCas {
   logout() {
     const options = this.options;
 
-    return function* (ctx) {
-      if (!ctx.session) {
-        return ctx.redirect('/');
+    return function* () {
+      if (!this.session) {
+        return this.redirect('/');
       }
       // Forget our own login session
 
-      if (ctx.session.destroy) {
-        yield ctx.session.destroy();
+      if (this.session.destroy) {
+        yield this.session.destroy();
       } else {
         // Cookie-based sessions have no destroy()
-        ctx.session = null;
+        this.session = null;
       }
       // Send the user to the official campus-wide logout URL
-      return ctx.redirect(utils.getPath('logout', options));
+      return this.redirect(utils.getPath('logout', options));
     };
   }
 

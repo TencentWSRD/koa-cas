@@ -116,14 +116,14 @@ describe('清理全局tgt工作正常', function() {
           expect(cachedPgt).to.equal(pgt);
         }
         console.log('hookAfterCasConfig start getProxyTicket...');
-        const pt = yield ctx.request.getProxyTicket('some targetService');
+        const pt = yield ctx.getProxyTicket('some targetService');
         console.log('final pt: ', pt);
         pgt = globalPGTStore.get('demo1');
         expect(pgt).to.not.be.empty;
         ctx.body = pt;
         return;
       } else if (ctx.path === '/clearRestlet') {
-        yield ctx.request.clearRestlet();
+        yield ctx.clearRestlet();
         ctx.body = 'ok';
         return;
       } else {

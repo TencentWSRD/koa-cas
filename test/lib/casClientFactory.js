@@ -52,7 +52,7 @@ module.exports = function(app, casOptions, {
       validate: '/cas/validate',
       serviceValidate: '/cas/serviceValidate',
       proxy: '/cas/proxy',
-      login: '/cas/login',
+      login: '/cas/login', // or login(ctx) => {}
       logout: '/cas/logout',
       proxyCallback: '/cas/proxyCallback',
       restletIntegration: '/buglycas/v1/tickets',
@@ -72,12 +72,12 @@ module.exports = function(app, casOptions, {
       header: 'x-client-ajax',
       status: 418,
     },
-    logger(req, type) {
+    logger(ctx, type) { // eslint-disable-line
       return function() {};
     },
     restletIntegration: {
       demo1: {
-        trigger(ctx) {
+        trigger(ctx) { // eslint-disable-line
           // console.log('Checking restletIntegration rules');
           return false;
         },

@@ -1,138 +1,111 @@
-var casServer = require('./lib/casServer');
-var Express = require('express');
-var http = require('http');
-
-var url = require('url');
-
-var expect = require('chai').expect;
-
-var casServerFactory = require('./lib/casServer');
-var casClientFactory = require('./lib/casClientFactory');
-
-var utils = require('../lib/utils');
-
-var handleCookies = require('./lib/handleCookie');
-
+import Koa from 'koa';
+import co from 'co';
+import supertest from 'supertest';
+import {
+  logger,
+} from './lib/test-utils';
+import { expect } from 'chai';
+import casServerFactory from './lib/casServer';
+import casClientFactory from './lib/casClientFactory';
+import handleCookies from './lib/handleCookie';
 
 describe('logout中间件正常', function() {
-  var casClientApp, casClientServer, casServerApp, casServer,
-    localhost = 'http://localhost',
-    casPort = '3004',
-    clientPort = '3002',
-    casRootPath = localhost + ':' + casPort,
-    clientPath = localhost + ':' + clientPort,
-    hookBeforeCasConfig, hookAfterCasConfig;
+  const localhost = 'http://127.0.0.1';
+  const casPort = 3004;
+  const clientPort = 3002;
+  const serverPath = `${localhost}:${casPort}`;
+  const clientPath = `${localhost}:${clientPort}`;
+
+  let casClientApp;
+  let casClientServer;
+  let casServerApp;
+  let casServer;
+  let request;
+  let serverRequest;
+  let hookBeforeCasConfig;
+  let hookAfterCasConfig;
 
   beforeEach(function(done) {
 
-    casServerApp = new Express();
-
+    casServerApp = new Koa();
     casServerFactory(casServerApp);
 
-    casServer = http.createServer(casServerApp);
-
-    casClientApp = new Express();
-
+    casClientApp = new Koa();
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
-      serverPath: casRootPath,
+      serverPath,
       paths: {
-        proxyCallback: ''
+        proxyCallback: '',
       },
-      logger: function(req, type) {
-        return function() {
-        };
-      }
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookBeforeCasConfig === 'function') {
-          hookBeforeCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookAfterCasConfig === 'function') {
-          hookAfterCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
+      logger,
+    }, {
+      beforeCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookBeforeCasConfig === 'function') {
+            return yield hookBeforeCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
+      afterCasConfigHook(app) {
+        app.use(function* (next) {
+          if (typeof hookAfterCasConfig === 'function') {
+            return yield hookAfterCasConfig(this, next);
+          } else {
+            return yield next;
+          }
+        });
+      },
     });
 
-    casClientServer = http.createServer(casClientApp);
+    co(function* () {
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      console.log(`casServer listen ${casPort}`);
+      serverRequest = supertest.agent(casServerApp.listen());
 
-    casServer.listen(3004, function(err) {
-      if (err) throw err;
-
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
-
-        done();
-      });
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      console.log(`casClientServer listen ${clientPort}`);
+      request = supertest.agent(casClientApp.listen());
+      done();
     });
   });
 
   afterEach(function(done) {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
-    casServer.close();
-    casClientServer.close();
-    done();
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      done();
+    });
   });
 
   it('调用logout中间件后, 注销session, 并302到/cas/logout', function(done) {
-    hookAfterCasConfig = function(req, res, next) {
-      if (req.path === '/') {
-        res.send(req.session.cas);
+    hookAfterCasConfig = function*(ctx, next) {
+      if (ctx.path === '/') {
+        ctx.body = ctx.session.cas || '';
       } else {
-        next();
+        yield next;
       }
     };
 
-    utils.getRequest(casRootPath + '/cas/login?service=' + encodeURIComponent(clientPath + '/cas/validate'), function(err, response) {
-      if (err) throw err;
+    co(function* () {
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      expect(response.status).to.equal(302);
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      const cookies = handleCookies.setCookies(res.header);
+      expect(res.header.location).to.equal('/');
 
-      var redirectLocation = response.header.location;
-      var cookies;
+      res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      const body = JSON.parse(res.text);
+      expect(body.user).to.not.be.empty;
+      expect(body.st).to.not.be.empty;
 
-      utils.getRequest(redirectLocation, function(err, response) {
-        if (err) throw err;
-
-        cookies = handleCookies.setCookies(response.header);
-
-        expect(response.status).to.equal(302);
-        expect(response.header.location).to.equal('/');
-
-        utils.getRequest(clientPath + '/', {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies)
-          }
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(200);
-          expect(response.body).to.not.be.empty;
-          var body = JSON.parse(response.body);
-
-          expect(body.user).to.not.be.empty;
-          expect(body.st).to.not.be.empty;
-
-          utils.getRequest(clientPath + '/logout', {
-            headers: {
-              Cookie: handleCookies.getCookies(cookies)
-            }
-          }, function(err, response) {
-            if (err) throw err;
-            expect(response.status).to.equal(302);
-            expect(response.header.location.indexOf(casRootPath + '/cas/logout') > -1).to.be.true;
-            done();
-          });
-        })
-      });
-    })
-  })
+      res = yield request.get('/logout').set('Cookie', handleCookies.getCookies(cookies)).expect(302);
+      expect(res.header.location.indexOf(`${serverPath}/cas/logout`) > -1).to.be.true;
+      done();
+    });
+  });
 });
