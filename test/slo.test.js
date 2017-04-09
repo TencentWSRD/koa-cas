@@ -70,6 +70,17 @@ describe('slo能够正确响应并注销', function() {
       },
     });
 
+    hookAfterCasConfig = function*(ctx, next) {
+      if (ctx.path === '/') {
+        ctx.body = {
+          cas: ctx.session.cas,
+          id: ctx.sessionId,
+        };
+      } else {
+        return yield next;
+      }
+    };
+
     co(function* () {
       yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
       console.log(`casServer listen ${casPort}`);
@@ -92,18 +103,7 @@ describe('slo能够正确响应并注销', function() {
     });
   });
 
-  it.only('slo能够正确响应并注销登录', function(done) {
-    hookAfterCasConfig = function*(ctx, next) {
-      if (ctx.path === '/') {
-        ctx.body = {
-          cas: ctx.session.cas,
-          id: ctx.sessionId,
-        };
-      } else {
-        return yield next;
-      }
-    };
-
+  it('slo能够正确响应并注销登录', function(done) {
     co(function* () {
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
       const redirectLocation = res.header.location;
@@ -122,7 +122,7 @@ describe('slo能够正确响应并注销', function() {
       expect(body.cas.pgt).to.not.be.empty;
       expect(body.id).to.not.be.empty;
 
-      res = yield request.post('/cas/validate').send(getLogoutXml(ticket)).expect(200);
+      res = yield request.post('/cas/validate').type('xml').send(getLogoutXml(ticket)).expect(200);
       res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(302);
       expect(res.header.location.indexOf('/cas/login') > -1).to.be.true;
       done();
@@ -131,75 +131,33 @@ describe('slo能够正确响应并注销', function() {
 
 
   it('slo发送非法xml, 响应202', function(done) {
-    hookAfterCasConfig = function(req, res, next) {
-      if (req.path === '/') {
-        res.send({
-          cas: req.session.cas,
-          id: req.session.id,
-        });
-      } else {
-        next();
-      }
-    };
-
-    utils.getRequest(`${serverPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
-      if (err) throw err;
-
-      expect(response.status).to.equal(302);
-
-      const redirectLocation = response.header.location;
+    co(function* () {
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
       const uri = url.parse(redirectLocation, true);
-
       const ticket = uri.query.ticket;
-      let cookies;
+      expect(ticket).to.not.be.empty;
 
-      utils.getRequest(redirectLocation, function(err, response) {
-        if (err) throw err;
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      const cookies = handleCookies.setCookies(res.header);
+      expect(res.header.location).to.equal('/');
 
-        cookies = handleCookies.setCookies(response.header);
+      res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      let body = JSON.parse(res.text);
+      expect(body.cas.user).to.not.be.empty;
+      expect(body.cas.st).to.not.be.empty;
+      expect(body.cas.pgt).to.not.be.empty;
+      expect(body.id).to.not.be.empty;
 
-        expect(response.status).to.equal(302);
-        expect(response.header.location).to.equal('/');
-
-        utils.getRequest(`${clientPath}/`, {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies),
-          },
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(200);
-          expect(response.body).to.not.be.empty;
-          const body = JSON.parse(response.body);
-
-          expect(body.cas.user).to.not.be.empty;
-          expect(body.cas.st).to.not.be.empty;
-          expect(body.cas.pgt).to.not.be.empty;
-          expect(body.id).to.not.be.empty;
-
-          // 到这里, 成功登录
-
-          utils.postRequest(`${clientPath}/cas/validate`, 'some invalid string', function(err, response) {
-            if (err) throw err;
-            expect(response.status).to.equal(202);
-
-            utils.getRequest(clientPath, {
-              headers: {
-                Cookie: handleCookies.getCookies(cookies),
-              },
-            }, function(err, response) {
-              if (err) throw err;
-
-              // console.log(response);
-              expect(response.status).to.equal(200);
-              done();
-            });
-          });
-        });
-      });
-    });
-
-
+      res = yield request.post('/cas/validate').type('xml').send('some invalid string').expect(202);
+      res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      body = JSON.parse(res.text);
+      expect(body.cas.user).to.not.be.empty;
+      expect(body.cas.st).to.not.be.empty;
+      expect(body.cas.pgt).to.not.be.empty;
+      expect(body.id).to.not.be.empty;
+      done();
+    }).catch(done);
   });
 
 });
