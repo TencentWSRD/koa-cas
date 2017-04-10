@@ -1,331 +1,214 @@
-import  Express  from 'express';
-import  http  from 'http';
-import  url  from 'url';
-import  expect  from 'chai'.expect;
-import  casServerFactory  from './lib/casServer';
-import  casClientFactory  from './lib/casClientFactory';
-import  utils  from '../lib/utils';
-import  handleCookies  from './lib/handleCookie';
+import Koa from 'koa';
+import co from 'co';
+import supertest from 'supertest';
+import {
+  logger, hooks,
+} from './lib/test-utils';
+import { expect } from 'chai';
+import casServerFactory from './lib/casServer';
+import casClientFactory from './lib/casClientFactory';
+import handleCookies from './lib/handleCookie';
 
 describe('validate是否符合预期', function() {
 
-  let casClientApp, casClientServer, casServerApp, casServer,
-    localhost = 'http://localhost',
-    casPort = '3004',
-    clientPort = '3002',
-    casRootPath = `${localhost}:${casPort}`,
-    clientPath = `${localhost}:${clientPort}`,
-    hookBeforeCasConfig, hookAfterCasConfig;
+  const localhost = 'http://127.0.0.1';
+  const casPort = 3004;
+  const clientPort = 3002;
+  const serverPath = `${localhost}:${casPort}`;
+  const clientPath = `${localhost}:${clientPort}`;
+
+  let casClientApp;
+  let casClientServer;
+  let casServerApp;
+  let casServer;
+  let serverRequest;
+  let request;
+  let hookBeforeCasConfig;
+  let hookAfterCasConfig;
+
+  const casConfigHooks = {
+    beforeCasConfigHook(app) {
+      app.use(function* (next) {
+        if (typeof hookBeforeCasConfig === 'function') {
+          return yield hookBeforeCasConfig(this, next);
+        } else {
+          return yield next;
+        }
+      });
+    },
+    afterCasConfigHook(app) {
+      app.use(function* (next) {
+        if (typeof hookAfterCasConfig === 'function') {
+          return yield hookAfterCasConfig(this, next);
+        } else {
+          return yield next;
+        }
+      });
+    },
+  };
 
   beforeEach(function(done) {
 
-    casServerApp = new Express();
-
+    casServerApp = new Koa();
     casServerFactory(casServerApp);
 
-    casServer = http.createServer(casServerApp);
-
-    casClientApp = new Express();
-
+    casClientApp = new Koa();
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
-      serverPath: casRootPath,
-      logger(req, type) {
-        return function() {
-        };
-      },
-      hooks: {
-        before(req, res, next) {
-          req.start = Date.now();
-          next();
-        },
-        after(req, res, next) {
-          expect(req.start).to.not.be.empty;
-          next();
-        },
-      },
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookBeforeCasConfig === 'function') {
-          hookBeforeCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
-    }, function(app) {
-      app.use(function(req, res, next) {
-        if (typeof hookAfterCasConfig === 'function') {
-          hookAfterCasConfig(req, res, next);
-        } else {
-          next();
-        }
-      });
-    });
+      serverPath,
+      logger,
+      hooks,
+    }, casConfigHooks);
 
-    casClientServer = http.createServer(casClientApp);
+    co(function* () {
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      console.log(`casServer listen ${casPort}`);
+      serverRequest = supertest.agent(casServerApp.listen());
 
-    casServer.listen(3004, function(err) {
-      if (err) throw err;
-
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
-
-        done();
-      });
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      console.log(`casClientServer listen ${clientPort}`);
+      request = supertest.agent(casClientApp.listen());
+      done();
     });
   });
 
   afterEach(function(done) {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
-    casServer.close();
-    casClientServer.close();
-    done();
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      done();
+    });
   });
 
   it('req.query中无ticket参数,302重定向到lastUrl', function(done) {
-
-    utils.getRequest(`${clientPath}/cas/validate`, function(err, response) {
-      if (err) throw err;
-
-      expect(response.status).to.equal(302);
-      expect(response.header.location).to.equal('/');
-
+    co(function* () {
+      const res = yield request.get('/cas/validate').expect(302);
+      expect(res.header.location).to.equal('/');
       done();
     });
   });
 
   it('req.query中带ticket参数,但是与session中的st一样, 302回lastUrl', function(done) {
-    utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
-      if (err) throw err;
 
-      expect(response.status).to.equal(302);
+    co(function* () {
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      const redirectLocation = response.header.location;
-      let cookies;
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      expect(res.header.location).to.equal('/');
+      const cookies = handleCookies.setCookies(res.header);
 
-      utils.getRequest(redirectLocation, function(err, response) {
-        if (err) throw err;
-
-        cookies = handleCookies.setCookies(response.header);
-
-        expect(response.status).to.equal(302);
-        expect(response.header.location).to.equal('/');
-
-        utils.getRequest(redirectLocation, {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies),
-          },
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-          expect(response.header.location).to.equal('/');
-          done();
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).set('Cookie', handleCookies.getCookies(cookies)).expect(302);
+      expect(res.header.location).to.equal('/');
+      done();
+    }).catch(done);
   });
 
   it('校验ticket请求失败,响应非200,返回401', function(done) {
-    casServer.close(function(err) {
-      if (err) throw err;
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
 
-      casServerApp = new Express();
-
+      casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatus: 500,
       });
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      serverRequest = supertest.agent(casServerApp.listen());
 
-      casServer = http.createServer(casServerApp);
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      casServer.listen(3004, function(err) {
-        if (err) throw err;
-
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(401);
-            done();
-          });
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(401);
+      done();
+    }).catch(done);
   });
 
   it('校验ticket请求成功,但解析响应xml失败,返回500', function(done) {
-    casServer.close(function(err) {
-      if (err) throw err;
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
 
-      casServerApp = new Express();
-
+      casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatusStr: 'invalid',
       });
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      serverRequest = supertest.agent(casServerApp.listen());
 
-      casServer = http.createServer(casServerApp);
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      casServer.listen(3004, function(err) {
-        if (err) throw err;
-
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          expect(redirectLocation).to.not.be.empty;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(500);
-            done();
-          });
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(500);
+      const body = JSON.parse(res.text);
+      expect(body.message).to.not.be.empty;
+      done();
+    }).catch(done);
   });
 
   it('校验ticket请求成功,解析响应xml成功,但响应内容为非成功,响应401', function(done) {
-    casServer.close(function(err) {
-      if (err) throw err;
+    co(function* () {
+      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
 
-      casServerApp = new Express();
-
+      casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatusStr: 'fail',
       });
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      serverRequest = supertest.agent(casServerApp.listen());
 
-      casServer = http.createServer(casServerApp);
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      casServer.listen(3004, function(err) {
-        if (err) throw err;
-
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          expect(redirectLocation).to.not.be.empty;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(401);
-            done();
-          });
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(401);
+      const body = JSON.parse(res.text);
+      expect(body.message).to.not.be.empty;
+      expect(body.message.indexOf('validation is failed') !== -1).to.be.true;
+      done();
+    }).catch(done);
   });
 
   it('非代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,并直接302到lastUrl', function(done) {
+    co(function* () {
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
 
-    const cookies = {};
-
-    casClientServer.close(function(err) {
-      if (err) throw err;
-
-      casClientApp = new Express();
-
+      casClientApp = new Koa();
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         paths: {
           proxyCallback: '',
         },
-        logger(req, type) {
-          return function() {
+        logger,
+      }, casConfigHooks);
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      request = supertest.agent(casClientApp.listen());
+
+      hookAfterCasConfig = function* (ctx, next) {
+        if (ctx.path === '/') {
+          ctx.body = {
+            sid: ctx.sessionId,
+            cas: ctx.session.cas,
           };
-        },
+        } else {
+          return yield next;
+        }
+      };
 
-      }, function(app) {
-        app.use(function(req, res, next) {
-          // console.log(req.session);
-          next();
-        });
-      }, function(app) {
-        app.use(function(req, res, next) {
-          expect(req.session.cas.user).to.not.be.empty;
-          expect(req.session.cas.st).to.not.be.empty;
-          next();
-        });
-      });
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      casClientServer = http.createServer(casClientApp);
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      expect(res.header.location).to.be.equal('/');
+      const cookies = handleCookies.setCookies(res.header);
 
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
-
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          expect(redirectLocation).to.not.be.empty;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(302);
-
-            expect(response.header.location).to.not.be.empty;
-
-            expect(response.header['set-cookie']).to.not.be.empty;
-
-            response.header['set-cookie'].forEach(function(row) {
-              const cookieArr = row.split(';');
-              const keyValuePair = cookieArr[0].split('=');
-              cookies[keyValuePair[0]] = keyValuePair[1];
-            });
-
-            // console.log('cookies', cookies);
-
-            const lastUri = url.parse(response.header.location);
-            let lastUrl;
-
-            if (!lastUri.protocal) {
-              lastUrl = clientPath + response.header.location;
-            }
-
-            function makeCookieStr(cookies) {
-              const arr = [];
-              for (const i in cookies) {
-                arr.push(`${i}=${cookies[i]}`);
-              }
-              return arr.join('; ');
-            }
-
-            utils.getRequest(lastUrl, {
-              headers: {
-                Cookie: makeCookieStr(cookies),
-              },
-            }, function(err, response) {
-              if (err) throw err;
-
-              expect(response.status).to.equal(200);
-
-              done();
-            });
-          });
-        });
-
-
-      });
-    });
+      res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      const body = res.body;
+      expect(body.cas.user).to.not.be.empty;
+      expect(body.cas.st).to.not.be.empty;
+      expect(body.sid).to.not.be.empty;
+      done();
+    }).catch(done);
   });
 
   // it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,但是没pgtIou,响应401');
@@ -333,169 +216,102 @@ describe('validate是否符合预期', function() {
   // it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,但找不到pgtId,响应401');
 
   it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,找到pgtId,设置pgtId到session,302到lastUrl', function(done) {
-
-    hookAfterCasConfig = function(req, res, next) {
-      if (req.path === '/') {
-        res.send(req.session.cas);
+    hookAfterCasConfig = function* (ctx, next) {
+      if (ctx.path === '/') {
+        ctx.body = {
+          sid: ctx.sessionId,
+          cas: ctx.session.cas,
+        };
       } else {
-        next();
+        return yield next;
       }
     };
 
-    utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
-      if (err) throw err;
+    co(function* () {
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      expect(response.status).to.equal(302);
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      expect(res.header.location).to.be.equal('/');
+      const cookies = handleCookies.setCookies(res.header);
 
-      const redirectLocation = response.header.location;
-      let cookies;
-
-      utils.getRequest(redirectLocation, function(err, response) {
-        if (err) throw err;
-
-        cookies = handleCookies.setCookies(response.header);
-
-        expect(response.status).to.equal(302);
-        expect(response.header.location).to.equal('/');
-
-        utils.getRequest(`${clientPath}/`, {
-          headers: {
-            Cookie: handleCookies.getCookies(cookies),
-          },
-        }, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(200);
-          expect(response.body).to.not.be.empty;
-          const body = JSON.parse(response.body);
-
-          expect(body.user).to.not.be.empty;
-          expect(body.st).to.not.be.empty;
-          expect(body.pgt).to.not.be.empty;
-
-          done();
-        });
-      });
-    });
+      res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
+      const body = JSON.parse(res.text);
+      expect(body.cas.user).to.not.be.empty;
+      expect(body.cas.st).to.not.be.empty;
+      expect(body.cas.pgt).to.not.be.empty;
+      expect(body.sid).to.not.be.empty;
+      done();
+    }).catch(done);
   });
 
   it('options.redirect工作正常', function(done) {
-    const cookies = {};
+    co(function* () {
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
 
-    casClientServer.close(function(err) {
-      if (err) throw err;
-
-      casClientApp = new Express();
-
-      casClientApp.get('/helloworld', function(req, res) {
-        res.send('ok');
-      });
-
+      casClientApp = new Koa();
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         paths: {
           proxyCallback: '',
         },
-        redirect(req, res) {
+        redirect(ctx) { // eslint-disable-line
           return '/helloworld';
         },
-        logger(req, type) {
-          return function() {
-          };
-        },
+        logger,
       });
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      request = supertest.agent(casClientApp.listen());
 
-      casClientServer = http.createServer(casClientApp);
+      hookAfterCasConfig = function* (ctx, next) {
+        if (ctx.pah === '/helloworld') {
+          ctx.body = 'ok';
+        } else {
+          return yield next;
+        }
+      };
 
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath }/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          expect(redirectLocation).to.not.be.empty;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(302);
-
-            expect(response.header.location).to.not.be.empty;
-
-            expect(response.header.location).to.equal('/helloworld');
-
-            done();
-          });
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      expect(res.header.location).to.be.equal('/helloworld');
+      done();
+    }).catch(done);
   });
 
   it('hooks工作正常', function(done) {
-    casClientServer.close(function(err) {
-      if (err) throw err;
+    co(function* () {
+      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
 
-      casClientApp = new Express();
-
-      casClientApp.get('/helloworld', function(req, res) {
-        res.send('ok');
-      });
-
+      casClientApp = new Koa();
       casClientFactory(casClientApp, {
         servicePrefix: clientPath,
-        serverPath: casRootPath,
+        serverPath,
         paths: {
           proxyCallback: '',
         },
+        logger,
         hooks: {
-          before(req, res, next) {
-            req.start = Date.now();
-            next();
+          *before(ctx) {
+            ctx.start = Date.now();
           },
-          after(req, res, next) {
-            expect(req.start).to.not.be.empty;
-            next();
+          *after(ctx) {
+            expect(ctx.start).to.not.be.empty;
           },
         },
-        logger(req, type) {
-          return function() {
-          };
-        },
       });
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      request = supertest.agent(casClientApp.listen());
 
-      casClientServer = http.createServer(casClientApp);
+      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      const redirectLocation = res.header.location;
 
-      casClientServer.listen(3002, function(err) {
-        if (err) throw err;
-
-        utils.getRequest(`${casRootPath}/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`, function(err, response) {
-          if (err) throw err;
-
-          expect(response.status).to.equal(302);
-
-          const redirectLocation = response.header.location;
-
-          expect(redirectLocation).to.not.be.empty;
-
-          utils.getRequest(redirectLocation, function(err, response) {
-            if (err) throw err;
-
-            expect(response.status).to.equal(302);
-
-            expect(response.header.location).to.not.be.empty;
-
-            // expect(response.header.location).to.equal('/helloworld');
-
-            done();
-          });
-        });
-      });
-    });
+      res = yield request.get(redirectLocation.replace(clientPath, '')).expect(302);
+      expect(res.header.location).to.be.equal('/');
+      done();
+    }).catch(done);
   });
 
 });

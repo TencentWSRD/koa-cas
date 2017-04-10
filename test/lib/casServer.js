@@ -155,7 +155,7 @@ module.exports = (app, options) => {
   app.use(convert(json()));
 
   const router = new Router();
-  router.get('/cas/servicevalidate', function* () {
+  router.get('/cas/serviceValidate', function* () {
     if (options.expectStatus !== 200) {
       this.status = options.expectStatus;
       return;
