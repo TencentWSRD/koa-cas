@@ -30,7 +30,7 @@ describe('利用restlet integration访问正常', function() {
   let hookAfterCasConfig;
 
   beforeEach(function(done) {
-
+    globalPGTStore.clear();
     casServerApp = new Koa();
     casServerFactory(casServerApp);
 

@@ -1,7 +1,7 @@
 import {
   expect,
 } from 'chai';
-const hideLog = false;
+const hideLog = true;
 
 export const hooks = {
   * before(ctx) {

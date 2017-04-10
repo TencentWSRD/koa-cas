@@ -1,16 +1,24 @@
-import url from 'url';
 import Koa from 'koa';
 import co from 'co';
-import supertest from 'supertest';
 import bodyParser from 'koa-bodyparser';
 import cookie from 'koa-cookie';
 import json from 'koa-json';
 import convert from 'koa-convert';
 import {
-  logger, hooks,
-} from './lib/test-utils';
-import utils from '../lib/utils';
-import { expect } from 'chai';
+  toArray,
+  getPath,
+  isMatchRule,
+  getOrigin,
+  shouldIgnore,
+  getLastUrl,
+  getRequest,
+  postRequest,
+  deleteRequest,
+  getLogger,
+} from '../lib/utils';
+import {
+  expect,
+} from 'chai';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
@@ -23,14 +31,13 @@ describe('utils单元测试', function() {
   const httpsPort = 3003;
   const httpsLocalPath = 'https://localhost:3003';
 
+  const loggerFactory = function (ctx, type) { // eslint-disable-line
+    return function() {};
+  };
+
   let app;
   let server;
   let httpsServer;
-
-  const loggerFactory = function(req, type) {
-    return function() {
-    };
-  };
 
   before(function(done) {
     app = new Koa();
@@ -39,20 +46,31 @@ describe('utils单元测试', function() {
     app.use(convert(bodyParser()));
     app.use(convert(json()));
 
-    app.get('/', function(req, res) {
-      res.send({
-        message: 'ok',
-      });
-    });
-
-    app.delete('/', function(req, res) {
-      res.send({
-        message: 'ok',
-      });
-    });
-
-    app.post('/', function(req, res) {
-      res.send(req.body);
+    app.use(function* (next) {
+      if (this.path === '/') {
+        switch (this.method) {
+          case 'GET':
+            this.body = {
+              message: 'ok',
+            };
+            return;
+          case 'DELETE':
+            this.body = {
+              message: 'ok',
+            };
+            return;
+          case 'POST':
+            this.body = this.request.body;
+            return;
+          default:
+            this.body = {
+              message: 'Not Found',
+            };
+            return;
+        }
+      } else {
+        return yield next;
+      }
     });
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -65,17 +83,14 @@ describe('utils单元测试', function() {
       rejectUnhauthorized: false,
     };
 
-    server = http.createServer(app).listen(port, function(err) {
+    server = http.createServer(app.callback()).listen(port, function(err) {
       if (err) throw err;
 
-      httpsServer = https.createServer(options, app).listen(httpsPort, function(err) {
+      httpsServer = https.createServer(options, app.callback()).listen(httpsPort, function(err) {
         if (err) throw err;
-
         done();
       });
     });
-
-
   });
 
   after(function(done) {
@@ -91,14 +106,13 @@ describe('utils单元测试', function() {
 
   it('toArray, 传入伪数组, 输出真正数组', function() {
     function aFunction() {
-      expect(utils.toArray(arguments)).to.be.a('array');
-      expect(utils.toArray(null)).to.be.a('array');
-      expect(utils.toArray(undefined)).to.be.a('array');
-      expect(utils.toArray(NaN)).to.be.a('array');
-      expect(utils.toArray(1)).to.be.a('array');
-      expect(utils.toArray('hi')).to.be.a('array');
-      expect(utils.toArray({})).to.be.a('array');
-
+      expect(toArray(arguments)).to.be.a('array');
+      expect(toArray(null)).to.be.a('array');
+      expect(toArray(undefined)).to.be.a('array');
+      expect(toArray(NaN)).to.be.a('array');
+      expect(toArray(1)).to.be.a('array');
+      expect(toArray('hi')).to.be.a('array');
+      expect(toArray({})).to.be.a('array');
     }
 
     aFunction(1, 2, 3);
@@ -119,12 +133,12 @@ describe('utils单元测试', function() {
       },
     };
 
-    expect(utils.getPath('login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(utils.getPath('logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(utils.getPath('pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
+    expect(getPath('login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath('logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath('pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
 
     // absolute path
-    expect(utils.getPath('pgtUrl', {
+    expect(getPath('pgtUrl', {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
       paths: {
@@ -138,42 +152,42 @@ describe('utils单元测试', function() {
       },
     })).to.equal('http://10.17.86.87:8080/cas/proxyCallback');
 
-    expect(utils.getPath('serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
-    expect(utils.getPath('proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
-    expect(utils.getPath('service', options)).to.equal('http://localhost:8080/cas/validate');
-    expect(utils.getPath('validate', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath('serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
+    expect(getPath('proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
+    expect(getPath('service', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath('validate', options)).to.equal('http://localhost:8080/cas/validate');
 
-    expect(utils.getPath('restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
+    expect(getPath('restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
   });
 
   it('isMatchRule校验规则符合预期', function() {
-    const req = {
+    const ctx = {
       path: '/',
     };
 
-    expect(utils.isMatchRule(req, '/', '/')).to.be.true;
-    expect(utils.isMatchRule(req, '/', '/api')).to.be.false;
+    expect(isMatchRule(ctx, '/', '/')).to.be.true;
+    expect(isMatchRule(ctx, '/', '/api')).to.be.false;
 
-    expect(utils.isMatchRule(req, '/', /\//)).to.be.true;
-    expect(utils.isMatchRule(req, '/', /\/api/)).to.be.false;
+    expect(isMatchRule(ctx, '/', /\//)).to.be.true;
+    expect(isMatchRule(ctx, '/', /\/api/)).to.be.false;
 
-    expect(utils.isMatchRule(req, '/', function(path, req) {
+    expect(isMatchRule(ctx, '/', function (path, ctx) { //eslint-disable-line
       return path === '/';
     })).to.be.true;
 
-    expect(utils.isMatchRule(req, '/', function(path, req) {
+    expect(isMatchRule(ctx, '/', function (path, ctx) { //eslint-disable-line
       return path === '/api';
     })).to.be.false;
   });
 
   it('getOrigin能够获取正确原始路径', function() {
-    const req = {
+    const ctx = {
       originalUrl: '/api',
       query: {
         ticket: 'some ticket',
       },
     };
-    expect(utils.getOrigin(req, {
+    expect(getOrigin(ctx, {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
       paths: {
@@ -189,79 +203,79 @@ describe('utils单元测试', function() {
   });
 
   it('shouldIgnore能够正确的解析规则', function() {
-    const req = {
+    const ctx = {
       path: '/',
     };
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       match: [ '/' ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       match: [ '/api' ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       match: [ /\// ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       match: [ /\/api/ ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
-      match: [ function(pathname, req) {
+    expect(shouldIgnore(ctx, {
+      match: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/';
       } ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
-      match: [ function(pathname, req) {
+    expect(shouldIgnore(ctx, {
+      match: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/api';
       } ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       ignore: [ '/' ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       ignore: [ '/api' ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       ignore: [ /\// ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       ignore: [ /\/api/ ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
-      ignore: [ function(pathname, req) {
+    expect(shouldIgnore(ctx, {
+      ignore: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/';
       } ],
       logger: loggerFactory,
     })).to.be.true;
 
-    expect(utils.shouldIgnore(req, {
-      ignore: [ function(pathname, req) {
+    expect(shouldIgnore(ctx, {
+      ignore: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/api';
       } ],
       logger: loggerFactory,
     })).to.be.false;
 
-    expect(utils.shouldIgnore(req, {
+    expect(shouldIgnore(ctx, {
       ignore: [],
       match: [],
       logger: loggerFactory,
@@ -285,167 +299,137 @@ describe('utils单元测试', function() {
       logger: loggerFactory,
     };
 
-    expect(utils.getLastUrl({
+    expect(getLastUrl({
       session: {
         lastUrl: 'http://localhost:8080/api',
       },
     }, options)).to.equal('http://localhost:8080/api');
 
-    expect(utils.getLastUrl({
+    expect(getLastUrl({
       session: {
         lastUrl: 'http://localhost:8080/',
       },
     }, options)).to.equal('http://localhost:8080/');
 
-    expect(utils.getLastUrl({
+    expect(getLastUrl({
       session: {
         lastUrl: 'http://localhost:8080/cas/validate',
       },
     }, options)).to.equal('/');
 
-    expect(utils.getLastUrl({}, options)).to.equal('/');
+    expect(getLastUrl({}, options)).to.equal('/');
   });
 
   it('getRequest能够正确发送http GET请求,接收请求', function(done) {
-    utils.getRequest(localPath, function(err, res) {
-      if (err) throw err;
-
+    co(function* () {
+      const res = yield getRequest(localPath);
       expect(res.status).to.equal(200);
-
-      expect(res.body).to.equal(JSON.stringify({
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify({
         message: 'ok',
       }));
-
       done();
-    });
+    }).catch(done);
   });
 
   it('getRequest能够正确发送https GET请求,接收请求', function(done) {
-    utils.getRequest(httpsLocalPath, function(err, res) {
-      if (err) throw err;
+    co(function* () {
+      const res = yield getRequest(httpsLocalPath);
       expect(res.status).to.equal(200);
-
-      expect(res.body).to.equal(JSON.stringify({
-        message: 'ok',
-      }));
-
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify({ message: 'ok' }));
       done();
-    });
+    }).catch(done);
   });
 
   it('postRequest能够正确发送http POST请求,接收请求', function(done) {
-    const data = {
-      hello: 'world',
-    };
+    co(function* () {
+      const data = {
+        hello: 'world',
+      };
 
-    utils.postRequest(localPath, data, function(err, res) {
-      if (err) {
-        throw err;
-      }
-
+      const res = yield postRequest(localPath, data);
       expect(res.status).to.equal(200);
-      expect(res.body).to.equal(JSON.stringify(data));
-
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify(data));
       done();
-    });
+    }).catch(done);
   });
 
   it('postRequest能够正确发送http POST请求, 设置特殊头, 并接收请求', function(done) {
-    const data = {
-      hello: 'world',
-    };
+    co(function* () {
+      const data = {
+        hello: 'world',
+      };
 
-    utils.postRequest(localPath, data, {
-      headers: {
-        Cookie: 'Content-Type: application/json',
-      },
-    }, function(err, res) {
-      if (err) {
-        throw err;
-      }
-
+      const res = yield postRequest(localPath, data, {
+        headers: {
+          Cookie: 'Content-Type: application/json',
+        },
+      });
       expect(res.status).to.equal(200);
-      expect(res.body).to.equal(JSON.stringify(data));
-
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify(data));
       done();
-    });
+    }).catch(done);
   });
 
   it('postRequest能够正确发送https POST请求,接收请求', function(done) {
-    const data = {
-      hello: 'world',
-    };
+    co(function* () {
+      const data = {
+        hello: 'world',
+      };
 
-    utils.postRequest(httpsLocalPath, data, function(err, res) {
-      if (err) {
-        throw err;
-      }
-
+      const res = yield postRequest(httpsLocalPath, data);
       expect(res.status).to.equal(200);
-      expect(res.body).to.equal(JSON.stringify(data));
-
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify(data));
       done();
-    });
+    }).catch(done);
   });
 
   it('deleteRequest能够正确发送http DELETE请求,接收请求', function(done) {
-    utils.deleteRequest(localPath, function(err, res) {
-      if (err) {
-        throw err;
-      }
-
+    co(function* () {
+      const res = yield deleteRequest(localPath);
       expect(res.status).to.equal(200);
-
-      expect(res.body).to.equal(JSON.stringify({
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify({
         message: 'ok',
       }));
-
       done();
-    });
+    }).catch(done);
   });
 
   it('deleteRequest能够正确发送https DELETE请求,接收请求', function(done) {
-    utils.deleteRequest(httpsLocalPath, function(err, res) {
-      if (err) {
-        throw err;
-      }
+    co(function* () {
+      const res = yield deleteRequest(httpsLocalPath);
       expect(res.status).to.equal(200);
-
-      expect(res.body).to.equal(JSON.stringify({
+      expect(res.body.replace(/\s*/g, '')).to.equal(JSON.stringify({
         message: 'ok',
       }));
-
       done();
-    });
+    }).catch(done);
   });
 
   it('getLogger工作正常', function(done) {
-    const app = new Express();
-
-    app.use(function(req, res, next) {
+    const app = new Koa();
+    app.use(function*(next) {
       function getLogger(type) {
         let user = 'unknown';
         try {
-          user = req.session.cas.user;
-        } catch (e) {
-        }
+          user = this.session.cas.user;
+        } catch (e) {} // eslint-disable-line
 
         if (!console[type]) {
           console.error('invalid console type', type);
           type = 'log';
         }
 
-        return console[type].bind(console[type], `${req.sn}|`, `${user}|`, `${req.ip}|`);
+        return console[type].bind(console[type], `${this.sn}|`, `${user}|`, `${this.ip}|`);
       }
 
-      req.getLogger = getLogger;
-      next();
+      this.getLogger = getLogger;
+      return yield next;
     });
 
-    app.use(function(req, res, next) {
-      let logger = utils.getLogger(req, {
-        logger(req, type) {
-          return req.getLogger(type);
+    app.use(function*(next) {
+      let logger = getLogger(this, {
+        logger(ctx, type) {
+          return ctx.getLogger(type);
         },
       });
 
@@ -454,32 +438,28 @@ describe('utils单元测试', function() {
       expect(typeof logger.error).to.equal('function');
       expect(typeof logger.log).to.equal('function');
 
-      logger = utils.getLogger(req);
+      logger = getLogger(this);
 
       expect(typeof logger.info).to.equal('function');
       expect(typeof logger.warn).to.equal('function');
       expect(typeof logger.error).to.equal('function');
       expect(typeof logger.log).to.equal('function');
-
-      next();
+      return yield next;
     });
 
-    app.get('/', function(req, res) {
-      res.send('ok');
+    app.use(function* (next) {
+      if (this.path === '/') {
+        this.body = 'ok';
+        return;
+      }
+      return yield next;
     });
-
-    const server = http.createServer(app);
-    server.listen(3004, function(err) {
-      if (err) throw err;
-      utils.getRequest('http://localhost:3004/', function(err, response) {
-        if (err) throw err;
-        server.close(function(err) {
-          if (err) throw err;
-          done();
-        });
-      });
-    });
-
-
+    let server;
+    co(function* () {
+      yield new Promise((r, j) => server = app.listen(3004, (err) => err ? j(err) : r()));
+      yield getRequest('http://localhost:3004/');
+      yield new Promise((r, j) => server.close((err) => err ? j(err) : r()));
+      done();
+    }).catch(done);
   });
 });
