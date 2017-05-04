@@ -1,6 +1,6 @@
 {
   "name": "koa-cas2",
-  "version": "1.2.4",
+  "version": "1.2.6",
   "main": "index.js",
   "license": "MIT",
   "author": "allanfish",
