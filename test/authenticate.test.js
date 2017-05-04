@@ -1,12 +1,12 @@
-import Koa from 'koa';
-import casClientFactory from './lib/casClientFactory';
-import supertest from 'supertest';
-import {
+const Koa = require('koa');
+const casClientFactory = require('./lib/casClientFactory');
+const supertest = require('supertest');
+const {
   hooks,
   logger,
   sessionStAndPgtHook,
   sessionStHook,
-} from './lib/test-utils';
+} = require('./lib/test-utils');
 
 describe('校验判断登陆状态', function() {
   let server;

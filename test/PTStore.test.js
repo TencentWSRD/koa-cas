@@ -1,13 +1,11 @@
-import Koa from 'koa';
-import co from 'co';
-import supertest from 'supertest';
-import {
-  logger, hooks,
-} from './lib/test-utils';
-import { expect } from 'chai';
-import casClientFactory from './lib/casClientFactory';
-import PTStore from '../lib/ptStroe';
-import handleCookies from './lib/handleCookie';
+const Koa = require('koa');
+const co = require('co');
+const supertest = require('supertest');
+const { logger, hooks } = require('./lib/test-utils');
+const { expect } = require('chai');
+const casClientFactory = require('./lib/casClientFactory');
+const PTStore = require('../lib/ptStroe');
+const handleCookies = require('./lib/handleCookie');
 
 describe('PTStore功能正常', function() {
 
@@ -36,6 +34,7 @@ describe('PTStore功能正常', function() {
       hooks,
     }, {
       beforeCasConfigHook(app) {
+        console.log('beforeCasConfigHook, app: ', app);
         app.use(function* (next) {
           if (typeof hookBeforeCasConfig === 'function') {
             return yield hookBeforeCasConfig(this, next);
@@ -56,6 +55,7 @@ describe('PTStore功能正常', function() {
     });
 
     hookBeforeCasConfig = function* (ctx, next) {
+      console.log('hookBeforeCasConfig');
       ctx.sessionSave = true; // 确保创建一个session, 在cookie中存储sessionid
       switch (ctx.path) {
         case '/get':
@@ -78,9 +78,12 @@ describe('PTStore功能正常', function() {
     };
 
     co(function* () {
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      console.log('beforeEach');
+      yield new Promise((r, j) => {
+        casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r());
+      });
       console.log(`casClientServer listen ${clientPort}`);
-      request = supertest.agent(casClientApp.listen());
+      request = supertest.agent(casClientServer);
       done();
     });
   });
@@ -89,6 +92,7 @@ describe('PTStore功能正常', function() {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
     co(function* () {
+      console.log('afterEach: casClientServer: ', !!casClientServer);
       yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
       done();
     });
@@ -103,6 +107,7 @@ describe('PTStore功能正常', function() {
 
     co(function* () {
       let res = yield request.get('/get').expect(200);
+      console.log('after get /');
       expect(res.text).to.be.empty;
       const cookies = handleCookies.setCookies(res.header);
 
@@ -112,7 +117,7 @@ describe('PTStore功能正常', function() {
       res = yield request.get('/clear').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
       expect(res.text).to.not.be.empty;
       done();
-    });
+    }).catch((err) => done(err));
   });
 
   it('set后, 在过期时间内, 可以正常获取', function(done) {

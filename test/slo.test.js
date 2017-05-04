@@ -1,15 +1,12 @@
-import url from 'url';
-import Koa from 'koa';
-import co from 'co';
-import supertest from 'supertest';
-import {
-  logger, hooks,
-} from './lib/test-utils';
-import { expect } from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import utils from '../lib/utils';
-import handleCookies from './lib/handleCookie';
+const url = require('url');
+const Koa = require('koa');
+const co = require('co');
+const supertest = require('supertest');
+const { logger, hooks } = require('./lib/test-utils');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
 
 const getLogoutXml = function(sessionId) {
   return `${'<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"' +

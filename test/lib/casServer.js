@@ -2,16 +2,16 @@
  * Simple CAS server implement for test case.
  *
  */
-import convert from 'koa-convert';
-import session from 'koa-generic-session';
-import bodyParser from 'koa-bodyparser';
-import cookie from 'koa-cookie';
-import Router from 'koa-router';
-import json from 'koa-json';
-import uuid from 'uuid';
-import utils from '../../lib/utils';
-import url from 'url';
-import qs from 'querystring';
+const session = require('koa-generic-session');
+const convert = require('koa-convert');
+const bodyParser = require('koa-bodyparser');
+const cookie = require('koa-cookie');
+const Router = require('koa-router');
+const json = require('koa-json');
+const uuid = require('uuid');
+const utils = require('../../lib/utils');
+const url = require('url');
+const qs = require('querystring');
 
 // var st = uuid.v4();
 // var pgtIou = 'PGTIOU-3-cyz9mq6SaNYsGXj7BEO2-login.rdm.org';
@@ -146,13 +146,13 @@ module.exports = (app, options) => {
   options.expectStatus = options.expectStatus || 200;
 
   app.keys = [ 'cas', 'test' ];
-  app.use(cookie('here is some secret'));
+  app.use(convert.back(cookie.default('here is some secret')));
   app.use(session({
     key: 'SESSIONID', // default "koa:sess"
     store: session.MemoryStore(),
   }));
-  app.use(convert(bodyParser()));
-  app.use(convert(json()));
+  app.use(bodyParser());
+  app.use(convert.back(json()));
 
   const router = new Router();
   router.get('/cas/serviceValidate', function* () {

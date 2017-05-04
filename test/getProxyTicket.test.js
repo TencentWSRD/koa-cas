@@ -1,15 +1,11 @@
-import Koa from 'koa';
-import {
-  expect,
-} from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import handleCookies from './lib/handleCookie';
-import {
-  logger,
-} from './lib/test-utils';
-import supertest from 'supertest';
-import co from 'co';
+const Koa = require('koa');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
+const { logger } = require('./lib/test-utils');
+const supertest = require('supertest');
+const co = require('co');
 
 const rootPathRoute = function* (ctx, next) {
   if (ctx.path === '/') {

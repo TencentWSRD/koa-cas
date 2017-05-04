@@ -1,13 +1,11 @@
-import Koa from 'koa';
-import co from 'co';
-import supertest from 'supertest';
-import {
-  logger, hooks,
-} from './lib/test-utils';
-import { expect } from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import handleCookies from './lib/handleCookie';
+const Koa = require('koa');
+const co = require('co');
+const supertest = require('supertest');
+const { logger, hooks } = require('./lib/test-utils');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
 
 describe('validate是否符合预期', function() {
 

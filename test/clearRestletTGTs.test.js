@@ -1,18 +1,12 @@
-import Koa from 'koa';
-import supertest from 'supertest';
-import {
-  expect,
-} from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import handleCookies from './lib/handleCookie';
-import globalPGTStore from '../lib/globalStoreCache';
-import {
-  parseRestletResponse,
-} from '../lib/getProxyTicketThroughRestletReq.js';
-import {
-  logger,
-} from './lib/test-utils';
+const Koa = require('koa');
+const supertest = require('supertest');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
+const globalPGTStore = require('../lib/globalStoreCache');
+const { parseRestletResponse } = require('../lib/getProxyTicketThroughRestletReq.js');
+const { logger } = require('./lib/test-utils');
 
 describe('清理全局tgt工作正常', function() {
 

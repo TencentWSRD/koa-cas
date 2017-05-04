@@ -1,14 +1,14 @@
 /**
  * For testing usage, separate the global config of the app
  */
-import convert from 'koa-convert';
-import session from 'koa-generic-session';
-import bodyParser from 'koa-bodyparser';
-import cookie from 'koa-cookie';
-import Router from 'koa-router';
-import json from 'koa-json';
-import CasClient from '../../index';
-import _ from 'lodash';
+const session = require('koa-generic-session');
+const convert = require('koa-convert');
+const bodyParser = require('koa-bodyparser');
+const cookie = require('koa-cookie');
+const Router = require('koa-router');
+const json = require('koa-json');
+const CasClient = require('../../index');
+const _ = require('lodash');
 
 /*
  *
@@ -24,13 +24,13 @@ module.exports = function(app, casOptions, {
 } = {}) {
 
   app.keys = [ 'cas', 'test' ];
-  app.use(cookie('here is some secret'));
+  app.use(convert.back(cookie.default('here is some secret')));
   app.use(session({
     key: 'SESSIONID', // default "koa:sess"
     store: session.MemoryStore(),
   }));
-  app.use(convert(bodyParser()));
-  app.use(convert(json()));
+  app.use(bodyParser());
+  app.use(convert.back(json()));
 
   const demoParams = {
     appId: '900007430',
@@ -38,7 +38,7 @@ module.exports = function(app, casOptions, {
     type: 8,
     appKey: 'BXEKfudgcgVDBb8k',
   };
-
+  console.log('casClientFactory: typeof beforeCasConfigHook = ', typeof beforeCasConfigHook === 'function');
   if (typeof beforeCasConfigHook === 'function') beforeCasConfigHook(app);
 
   const defaultOptions = {
@@ -100,7 +100,7 @@ module.exports = function(app, casOptions, {
   // CAS config
   // =============================================================================
   const casClient = new CasClient(defaultOptions);
-  app.use(convert(casClient.core()));
+  app.use(casClient.core());
 
 
   // console.log('defaultOptions', defaultOptions);

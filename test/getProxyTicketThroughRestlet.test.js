@@ -1,16 +1,12 @@
-import Koa from 'koa';
-import co from 'co';
-import supertest from 'supertest';
-import {
-  logger,
-} from './lib/test-utils';
-import {
-  expect,
-} from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import handleCookies from './lib/handleCookie';
-import globalPGTStore from '../lib/globalStoreCache';
+const Koa = require('koa');
+const co = require('co');
+const supertest = require('supertest');
+const { logger } = require('./lib/test-utils');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
+const globalPGTStore = require('../lib/globalStoreCache');
 
 describe('利用restlet integration访问正常', function() {
 

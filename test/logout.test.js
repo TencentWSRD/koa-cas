@@ -1,13 +1,11 @@
-import Koa from 'koa';
-import co from 'co';
-import supertest from 'supertest';
-import {
-  logger,
-} from './lib/test-utils';
-import { expect } from 'chai';
-import casServerFactory from './lib/casServer';
-import casClientFactory from './lib/casClientFactory';
-import handleCookies from './lib/handleCookie';
+const Koa = require('koa');
+const co = require('co');
+const supertest = require('supertest');
+const { logger } = require('./lib/test-utils');
+const { expect } = require('chai');
+const casServerFactory = require('./lib/casServer');
+const casClientFactory = require('./lib/casClientFactory');
+const handleCookies = require('./lib/handleCookie');
 
 describe('logout中间件正常', function() {
   const localhost = 'http://127.0.0.1';

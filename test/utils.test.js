@@ -1,10 +1,10 @@
-import Koa from 'koa';
-import co from 'co';
-import bodyParser from 'koa-bodyparser';
-import cookie from 'koa-cookie';
-import json from 'koa-json';
-import convert from 'koa-convert';
-import {
+const Koa = require('koa');
+const co = require('co');
+const convert = require('koa-convert');
+const bodyParser = require('koa-bodyparser');
+const cookie = require('koa-cookie');
+const json = require('koa-json');
+const {
   toArray,
   getPath,
   isMatchRule,
@@ -15,14 +15,12 @@ import {
   postRequest,
   deleteRequest,
   getLogger,
-} from '../lib/utils';
-import {
-  expect,
-} from 'chai';
-import http from 'http';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
+} = require('../lib/utils');
+const { expect } = require('chai');
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 describe('utils单元测试', function() {
 
@@ -42,9 +40,9 @@ describe('utils单元测试', function() {
   before(function(done) {
     app = new Koa();
     app.keys = [ 'cas', 'test' ];
-    app.use(cookie('here is some secret'));
-    app.use(convert(bodyParser()));
-    app.use(convert(json()));
+    app.use(convert.back(cookie.default('here is some secret')));
+    app.use(bodyParser());
+    app.use(convert.back(json()));
 
     app.use(function* (next) {
       if (this.path === '/') {

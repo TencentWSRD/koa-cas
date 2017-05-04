@@ -14,7 +14,7 @@
   },
   "scripts": {
     "start": "node ./example",
-    "mocha": "mocha --compilers js:babel-register",
+    "mocha": "mocha ",
     "test": "istanbul cover -x 'example/**' _mocha -- -R spec"
   },
   "bugs": {
@@ -43,8 +43,8 @@
     "eslint": "3.6.0",
     "eslint-config-egg": "^3.2.0",
     "istanbul": "^0.4.4",
-    "koa": "^2.x",
-    "koa-bodyparser": "^2.x",
+    "koa": "^1.4.0",
+    "koa-bodyparser": "^2.5.0",
     "koa-convert": "^1.2.0",
     "koa-cookie": "^1.0.0",
     "koa-generic-session": "^1.11.5",

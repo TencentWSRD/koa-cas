@@ -1,20 +1,20 @@
-import Koa from 'koa';
-import Router from 'koa-router';
-import supertest from 'supertest';
-import casServerFactory from './lib/casServer';
-import {
+const Koa = require('koa');
+const Router = require('koa-router');
+const supertest = require('supertest');
+const casServerFactory = require('./lib/casServer');
+const {
   expect,
-} from 'chai';
-import url from 'url';
-import {
+} = require('chai');
+const url = require('url');
+const {
   parseRestletResponse,
-} from '../lib/getProxyTicketThroughRestletReq';
-import {
+} = require('../lib/getProxyTicketThroughRestletReq');
+const {
   parseProxyTicketResponse,
-} from '../lib/getProxyTicket';
-import {
+} = require('../lib/getProxyTicket');
+const {
   parseCasResponse,
-} from '../lib/validate';
+} = require('../lib/validate');
 
 const logger = {
   info() {},
