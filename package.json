@@ -1,6 +1,6 @@
 {
   "name": "koa-cas2",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "main": "index.js",
   "license": "MIT",
   "author": "allanfish",
@@ -41,7 +41,7 @@
     "coveralls": "^2.11.12",
     "ejs": "^2.4.2",
     "eslint": "3.6.0",
-    "eslint-config-egg": "^3.2.0",
+    "eslint-config-bugly-base": "^11.1.9",
     "istanbul": "^0.4.4",
     "koa": "^1.4.0",
     "koa-bodyparser": "^2.5.0",
