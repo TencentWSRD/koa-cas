@@ -104,7 +104,7 @@ describe('利用restlet integration访问正常', function() {
           const cachedPgt = globalPGTStore.get('demo1');
           expect(cachedPgt).to.equal(pgt);
         }
-        const pt = yield ctx.getProxyTicket('some targetService');
+        const pt = yield ctx.getProxyTicket('http://xxx.com');
         pgt = globalPGTStore.get('demo1');
         expect(pgt).to.not.be.empty;
         ctx.body = pt;
@@ -130,14 +130,14 @@ describe('利用restlet integration访问正常', function() {
   it('登陆下, 配置restletIntegration, 命中规则, 命中规则的接口以restletIntegration的身份调取接口, 但不影响已登录用户的身份.', function(done) {
     hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
-        const loginedPt = yield ctx.getProxyTicket('xxx');
+        const loginedPt = yield ctx.getProxyTicket('http://xxx.com');
         ctx.body = loginedPt;
       } else if (ctx.path === '/restlet') {
         if (ctx.query && ctx.query.time) {
           const cachedPgt = globalPGTStore.get('demo1');
           expect(cachedPgt).to.not.be.empty;
         }
-        const restletPt = yield ctx.getProxyTicket('xxx');
+        const restletPt = yield ctx.getProxyTicket('http://xxx.com');
         ctx.body = restletPt;
       } else {
         yield next;
@@ -167,14 +167,14 @@ describe('利用restlet integration访问正常', function() {
   it('配置restletIntegration, 命中规则, 命中规则的接口以restletIntegration的身份调取接口, 再登陆, 然后访问正常接口, 互不影响', function(done) {
     hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
-        const loginedPt = yield ctx.getProxyTicket('xxx');
+        const loginedPt = yield ctx.getProxyTicket('http://xxx.com');
         ctx.body = loginedPt;
       } else if (ctx.path === '/restlet') {
         if (ctx.query && ctx.query.time) {
           const cachedPgt = globalPGTStore.get('demo1');
           expect(cachedPgt).to.not.be.empty;
         }
-        const restletPt = yield ctx.getProxyTicket('xxx');
+        const restletPt = yield ctx.getProxyTicket('http://xxx.com');
         ctx.body = restletPt;
       } else {
         yield next;
@@ -213,7 +213,7 @@ describe('利用restlet integration访问正常', function() {
       if (ctx.path === '/restlet') {
         invalidPgt = globalPGTStore.get('demo1');
 
-        const pt = yield ctx.getProxyTicket('xxx');
+        const pt = yield ctx.getProxyTicket('http://xxx.com');
         // should refetch a new pgt
         validPgt = globalPGTStore.get('demo1');
         expect(validPgt).to.not.equal(invalidPgt);
@@ -318,7 +318,7 @@ describe('利用restlet integration访问正常', function() {
             const cachedPgt = globalPGTStore.get('demo1');
             expect(cachedPgt).to.be.empty;
           }
-          const pt = yield ctx.getProxyTicket('some targetService');
+          const pt = yield ctx.getProxyTicket('http://xxx.com');
           pgt = globalPGTStore.get('demo1');
           expect(pgt).to.be.empty;
           ctx.body = pt;

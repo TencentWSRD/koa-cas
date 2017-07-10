@@ -9,7 +9,7 @@ const co = require('co');
 
 const rootPathRoute = function* (ctx, next) {
   if (ctx.path === '/') {
-    const pt = yield ctx.getProxyTicket('xxx');
+    const pt = yield ctx.getProxyTicket('http://xxx.com');
     ctx.body = pt;
   } else {
     yield next;
@@ -132,13 +132,13 @@ describe('能够正确获取proxy ticket: ', function() {
   it('登陆成功后能够成功获取pt,使用缓存, 但是设置disableCache, 再次请求的pt应与上一次不同', function(done) {
     hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
-        ctx.body = yield ctx.getProxyTicket('xxx');
+        ctx.body = yield ctx.getProxyTicket('http://xxx.com');
       } else if (ctx.path === '/noCache') {
-        ctx.body = yield ctx.getProxyTicket('xxx', {
+        ctx.body = yield ctx.getProxyTicket('http://xxx.com', {
           disableCache: true,
         });
       } else if (ctx.path === '/noCache/old') {
-        ctx.body = yield ctx.getProxyTicket('xxx', true);
+        ctx.body = yield ctx.getProxyTicket('http://xxx.com', true);
       } else {
         yield next;
       }
@@ -174,9 +174,9 @@ describe('能够正确获取proxy ticket: ', function() {
   it('登陆成功后能够成功获取pt,使用缓存, 设置renew, 再次请求的pt应与上一次不同, 再下一次与上一次相同', function(done) {
     hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
-        ctx.body = yield ctx.getProxyTicket('xxx');
+        ctx.body = yield ctx.getProxyTicket('http://xxx.com');
       } else if (ctx.path === '/renew') {
-        ctx.body = yield ctx.getProxyTicket('xxx', {
+        ctx.body = yield ctx.getProxyTicket('http://xxx.com', {
           renew: true,
         });
       } else {
@@ -229,7 +229,7 @@ describe('能够正确获取proxy ticket: ', function() {
       });
       casClientApp.use(function* (next) {
         if (this.path === '/getPt') {
-          this.body = yield this.getProxyTicket('xxx');
+          this.body = yield this.getProxyTicket('http://xxx.com');
         } else {
           yield next;
         }
@@ -272,7 +272,7 @@ describe('能够正确获取proxy ticket: ', function() {
       });
       casClientApp.use(function* (next) {
         if (this.path === '/getPt') {
-          this.body = yield this.getProxyTicket('xxx');
+          this.body = yield this.getProxyTicket('http://xxx.com');
         } else {
           yield next;
         }
@@ -344,7 +344,7 @@ describe('能够正确获取proxy ticket: ', function() {
       const cookies = handleCookies.setCookies(res.header);
 
       const targetServices = [
-        'xxx',
+        'http://xxx.com',
         'http://specialPath1.com',
         'http://specialPath2.com',
         'http://specialPath3.com',

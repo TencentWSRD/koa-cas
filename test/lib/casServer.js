@@ -243,12 +243,13 @@ module.exports = (app, options) => {
     if (this.query && this.query.service) {
       const pgtId = uuid.v4();
       tgts[pgtId] = initTgt();
-      const st = uuid.v4();
+      const st = `ST-${uuid.v4()}`;
       tgts[pgtId].st[st] = initTicket(this.query.service);
       const path = decodeURIComponent(this.query.service);
       const uri = url.parse(path, true);
       if (!uri.query) uri.query = {};
       uri.query.ticket = st;
+      console.log('tgts: ', JSON.stringify(tgts));
       this.redirect(url.format(uri));
     } else {
       this.body = 'ok';
