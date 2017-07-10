@@ -1,6 +1,6 @@
 {
   "name": "koa-cas2",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "main": "index.js",
   "license": "MIT",
   "author": "allanfish",
@@ -20,15 +20,18 @@
   "bugs": {
     "url": "https://github.com/TencentWSRD/koa-cas/issues"
   },
-  "maintainers": [{
-    "email": "googleyufei@qq.com",
-    "name": "allanfish"
-  }],
+  "maintainers": [
+    {
+      "email": "googleyufei@qq.com",
+      "name": "allanfish"
+    }
+  ],
   "dependencies": {
     "co": "^4.6.0",
     "deprecate": "^0.1.0",
     "is-type-of": "^1.0.0",
     "lodash": "^4.13.1",
+    "power-assert": "^1.4.4",
     "query-string": "^4.1.0",
     "xml2js": "^0.4.16"
   },
@@ -40,7 +43,7 @@
     "chai": "^3.5.0",
     "coveralls": "^2.11.12",
     "ejs": "^2.4.2",
-    "eslint": "3.6.0",
+    "eslint": "^3.9.0",
     "eslint-config-bugly-base": "^11.1.9",
     "istanbul": "^0.4.4",
     "koa": "^1.4.0",

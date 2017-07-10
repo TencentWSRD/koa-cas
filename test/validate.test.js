@@ -3,17 +3,17 @@ const co = require('co');
 const supertest = require('supertest');
 const {
   logger,
-  hooks
+  hooks,
 } = require('./lib/test-utils');
 const {
-  expect
+  expect,
 } = require('chai');
 const casServerFactory = require('./lib/casServer');
 const casClientFactory = require('./lib/casClientFactory');
 const handleCookies = require('./lib/handleCookie');
+const assert = require('power-assert');
 
-describe('validate是否符合预期', function () {
-
+describe('validate是否符合预期', () => {
   const localhost = 'http://127.0.0.1';
   const casPort = 3004;
   const clientPort = 3002;
@@ -34,24 +34,21 @@ describe('validate是否符合预期', function () {
       app.use(function* (next) {
         if (typeof hookBeforeCasConfig === 'function') {
           return yield hookBeforeCasConfig(this, next);
-        } else {
-          return yield next;
         }
+        return yield next;
       });
     },
     afterCasConfigHook(app) {
       app.use(function* (next) {
         if (typeof hookAfterCasConfig === 'function') {
           return yield hookAfterCasConfig(this, next);
-        } else {
-          return yield next;
         }
+        return yield next;
       });
     },
   };
 
-  beforeEach(function (done) {
-
+  beforeEach((done) => {
     casServerApp = new Koa();
     casServerFactory(casServerApp);
 
@@ -64,28 +61,28 @@ describe('validate是否符合预期', function () {
     }, casConfigHooks);
 
     co(function* () {
-      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, err => err ? j(err) : r()));
       console.log(`casServer listen ${casPort}`);
       serverRequest = supertest.agent(casServerApp.listen());
 
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       console.log(`casClientServer listen ${clientPort}`);
       request = supertest.agent(casClientApp.listen());
       done();
     });
   });
 
-  afterEach(function (done) {
+  afterEach((done) => {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
     co(function* () {
-      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer.close(err => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
       done();
     });
   });
 
-  it('req.query中无ticket参数,302重定向到lastUrl', function (done) {
+  it('req.query中无ticket参数,302重定向到lastUrl', (done) => {
     co(function* () {
       const res = yield request.get('/cas/validate').expect(302);
       expect(res.header.location).to.equal('/');
@@ -93,8 +90,7 @@ describe('validate是否符合预期', function () {
     });
   });
 
-  it('req.query中带ticket参数,但是与session中的st一样, 302回lastUrl', function (done) {
-
+  it('req.query中带ticket参数,但是与session中的st一样, 302回lastUrl', (done) => {
     co(function* () {
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
       const redirectLocation = res.header.location;
@@ -109,15 +105,15 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('校验ticket请求失败,响应非200,返回401', function (done) {
+  it('校验ticket请求失败,响应非200,返回401', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer.close(err => err ? j(err) : r()));
 
       casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatus: 500,
       });
-      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, err => err ? j(err) : r()));
       serverRequest = supertest.agent(casServerApp.listen());
 
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
@@ -128,15 +124,15 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('校验ticket请求成功,但解析响应xml失败,返回500', function (done) {
+  it('校验ticket请求成功,但解析响应xml失败,返回500', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer.close(err => err ? j(err) : r()));
 
       casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatusStr: 'invalid',
       });
-      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, err => err ? j(err) : r()));
       serverRequest = supertest.agent(casServerApp.listen());
 
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
@@ -149,15 +145,15 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('校验ticket请求成功,解析响应xml成功,但响应内容为非成功,响应401', function (done) {
+  it('校验ticket请求成功,解析响应xml成功,但响应内容为非成功,响应401', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer.close(err => err ? j(err) : r()));
 
       casServerApp = new Koa();
       casServerFactory(casServerApp, {
         expectStatusStr: 'fail',
       });
-      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, err => err ? j(err) : r()));
       serverRequest = supertest.agent(casServerApp.listen());
 
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
@@ -171,9 +167,9 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('非代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,并直接302到lastUrl', function (done) {
+  it('非代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,并直接302到lastUrl', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
 
       casClientApp = new Koa();
       casClientFactory(casClientApp, {
@@ -184,7 +180,7 @@ describe('validate是否符合预期', function () {
         },
         logger,
       }, casConfigHooks);
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       request = supertest.agent(casClientApp.listen());
 
       hookAfterCasConfig = function* (ctx, next) {
@@ -218,7 +214,7 @@ describe('validate是否符合预期', function () {
   //
   // it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,但找不到pgtId,响应401');
 
-  it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,找到pgtId,设置pgtId到session,302到lastUrl', function (done) {
+  it('代理模型,校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,找到pgtId,设置pgtId到session,302到lastUrl', (done) => {
     hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
         ctx.body = {
@@ -248,9 +244,9 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('options.redirect工作正常', function (done) {
+  it('options.redirect工作正常', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
 
       casClientApp = new Koa();
       casClientFactory(casClientApp, {
@@ -264,7 +260,7 @@ describe('validate是否符合预期', function () {
         },
         logger,
       });
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       request = supertest.agent(casClientApp.listen());
 
       hookAfterCasConfig = function* (ctx, next) {
@@ -284,9 +280,9 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('hooks工作正常', function (done) {
+  it('hooks工作正常', (done) => {
     co(function* () {
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
 
       casClientApp = new Koa();
       casClientFactory(casClientApp, {
@@ -305,7 +301,7 @@ describe('validate是否符合预期', function () {
           },
         },
       });
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       request = supertest.agent(casClientApp.listen());
 
       let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
@@ -317,7 +313,7 @@ describe('validate是否符合预期', function () {
     }).catch(done);
   });
 
-  it('servicePrefix配置, 域名后面带上path, 校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,找到pgtId,设置pgtId到session,302到lastUrl', function (done) {
+  it('servicePrefix配置, 域名后面带上path, 校验ticket请求成功,解析响应xml成功,响应内容成功,设置st到session,设置cas信息到session.cas,有pgtIou,找到pgtId,设置pgtId到session,302到lastUrl', (done) => {
     co(function* () {
       const clientPath = `${localhost}:${clientPort}/ci`;
       hookAfterCasConfig = function* (ctx, next) {
@@ -326,9 +322,9 @@ describe('validate是否符合预期', function () {
             sid: ctx.sessionId,
             cas: ctx.session.cas,
           };
-        } else {
-          return yield next;
+          return true;
         }
+        return yield next;
       };
 
       casClientApp = new Koa();
@@ -337,20 +333,24 @@ describe('validate是否符合预期', function () {
         serverPath,
         logger,
         paths: {
-          validate: '/ci/cas/validate',
-          proxyCallback: `/ci/cas/proxyCallback`,
+          validate: '/ci/cas/node-cas',
+          proxyCallback: '/ci/cas/proxyCallback',
         },
       }, casConfigHooks);
 
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       request = supertest.agent(casClientApp.listen());
 
-      let res = yield serverRequest.get(`/cas/login?service=${encodeURIComponent(`${clientPath}/cas/validate`)}`).expect(302);
+      let res = yield request.get('/').expect(302);
+      assert.ok(res.header.location.startsWith(`${serverPath}/cas/login`));
+      const loginUrl = res.header.location;
+
+      res = yield serverRequest.get(loginUrl.replace(serverPath, '')).expect(302);
       const redirectLocation = res.header.location;
 
       res = yield request.get(redirectLocation.replace(`${localhost}:${clientPort}`, '')).expect(302);
-      expect(res.header.location).to.be.equal('/');
+      expect(res.header.location).to.be.equal(`${clientPath}/`);
       const cookies = handleCookies.setCookies(res.header);
 
       res = yield request.get('/').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
@@ -362,5 +362,4 @@ describe('validate是否符合预期', function () {
       done();
     }).catch(done);
   });
-
 });
