@@ -130,7 +130,7 @@ describe('utils单元测试', () => {
       },
       supportSubDomain: false,
     };
-    const ctx = { originalUrl: '' };
+    const ctx = { origin: '' };
 
     expect(getPath(ctx, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
     expect(getPath(ctx, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
@@ -174,7 +174,7 @@ describe('utils单元测试', () => {
       },
       supportSubDomain: true,
     };
-    const ctx = { originalUrl: 'http://subdomain.localhost:8080' };
+    const ctx = { origin: 'http://subdomain.localhost:8080' };
     expect(getPath(ctx, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://subdomain.localhost:8080/cas/validate')}`);
     expect(getPath(ctx, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://subdomain.localhost:8080/cas/validate')}`);
     expect(getPath(ctx, 'pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
@@ -204,7 +204,7 @@ describe('utils单元测试', () => {
 
 
   it('utils.getPath(ctx, pgtUrl, options) servicePrefix中配置子路径', () => {
-    const ctx = { originalUrl: '' };
+    const ctx = { origin: '' };
     const options = {
       servicePrefix: 'http://localhost:8080/ci',
       serverPath: 'http://cas.sdet.wsd.com',
@@ -244,7 +244,7 @@ describe('utils单元测试', () => {
 
   it('getOrigin能够获取正确原始路径', () => {
     const ctx = {
-      originalUrl: '/api',
+      origin: 'http://localhost:8080/api',
       query: {
         ticket: 'some ticket',
       },

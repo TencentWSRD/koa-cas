@@ -1,3 +1,10 @@
+1.2.15
+=======
+* feature: 新增支持子域名的访问
+* getProxyTicket新增了targetService的url校验
+* 其他bugfix
+
+
 1.2.12
 ========
 * feature: 支持servicePrefix配置中存在路径的情况
