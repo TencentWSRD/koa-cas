@@ -224,12 +224,12 @@ class ConnectCas {
         this.session = null;
       }
       // Send the user to the official campus-wide logout URL
-      return this.redirect(utils.getPath('logout', options));
+      return this.redirect(utils.getPath(this, 'logout', options));
     };
   }
 
   getPath(name) {
-    return utils.getPath(name, this.options);
+    return utils.getPath(this, name, this.options);
   }
 
 }

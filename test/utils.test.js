@@ -130,13 +130,14 @@ describe('utils单元测试', () => {
       },
       supportSubDomain: false,
     };
+    const ctx = { originalUrl: '' };
 
-    expect(getPath({}, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(getPath({}, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(getPath({}, 'pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
+    expect(getPath(ctx, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath(ctx, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath(ctx, 'pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
 
     // absolute path
-    expect(getPath({}, 'pgtUrl', {
+    expect(getPath(ctx, 'pgtUrl', {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
       paths: {
@@ -150,12 +151,12 @@ describe('utils单元测试', () => {
       },
     })).to.equal('http://10.17.86.87:8080/cas/proxyCallback');
 
-    expect(getPath({}, 'serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
-    expect(getPath({}, 'proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
-    expect(getPath({}, 'service', options)).to.equal('http://localhost:8080/cas/validate');
-    expect(getPath({}, 'validate', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath(ctx, 'serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
+    expect(getPath(ctx, 'proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
+    expect(getPath(ctx, 'service', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath(ctx, 'validate', options)).to.equal('http://localhost:8080/cas/validate');
 
-    expect(getPath({}, 'restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
+    expect(getPath(ctx, 'restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
   });
 
   it('getPath传入指定名称, 支持subdomain, 返回拼好的路径', () => {
@@ -202,8 +203,8 @@ describe('utils单元测试', () => {
   });
 
 
-  it.only('utils.getPath(ctx, pgtUrl, options) servicePrefix中配置子路径', () => {
-    const ctx = {};
+  it('utils.getPath(ctx, pgtUrl, options) servicePrefix中配置子路径', () => {
+    const ctx = { originalUrl: '' };
     const options = {
       servicePrefix: 'http://localhost:8080/ci',
       serverPath: 'http://cas.sdet.wsd.com',
@@ -218,7 +219,7 @@ describe('utils单元测试', () => {
       },
     };
     expect(getPath(ctx, 'pgtUrl', options)).to.equal('http://localhost:8080/ci/cas/proxyCallback');
-    expect(getPath({}, 'validate', options)).to.equal('http://localhost:8080/ci/cas/validate');
+    expect(getPath(ctx, 'validate', options)).to.equal('http://localhost:8080/ci/cas/validate');
   });
 
   it('isMatchRule校验规则符合预期', () => {

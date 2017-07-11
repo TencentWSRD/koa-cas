@@ -7,7 +7,7 @@ const casServerFactory = require('./lib/casServer');
 const casClientFactory = require('./lib/casClientFactory');
 const handleCookies = require('./lib/handleCookie');
 
-describe('logout中间件正常', function() {
+describe('logout中间件正常', () => {
   const localhost = 'http://127.0.0.1';
   const casPort = 3004;
   const clientPort = 3002;
@@ -23,8 +23,7 @@ describe('logout中间件正常', function() {
   let hookBeforeCasConfig;
   let hookAfterCasConfig;
 
-  beforeEach(function(done) {
-
+  beforeEach((done) => {
     casServerApp = new Koa();
     casServerFactory(casServerApp);
 
@@ -41,49 +40,48 @@ describe('logout中间件正常', function() {
         app.use(function* (next) {
           if (typeof hookBeforeCasConfig === 'function') {
             return yield hookBeforeCasConfig(this, next);
-          } else {
-            return yield next;
           }
+          return yield next;
         });
       },
       afterCasConfigHook(app) {
         app.use(function* (next) {
           if (typeof hookAfterCasConfig === 'function') {
             return yield hookAfterCasConfig(this, next);
-          } else {
-            return yield next;
           }
+          return yield next;
         });
       },
     });
 
     co(function* () {
-      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer = casServerApp.listen(casPort, err => err ? j(err) : r()));
       console.log(`casServer listen ${casPort}`);
       serverRequest = supertest.agent(casServerApp.listen());
 
-      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r()));
       console.log(`casClientServer listen ${clientPort}`);
       request = supertest.agent(casClientApp.listen());
       done();
     });
   });
 
-  afterEach(function(done) {
+  afterEach((done) => {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
     co(function* () {
-      yield new Promise((r, j) => casServer.close((err) => err ? j(err) : r()));
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casServer.close(err => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
       done();
     });
   });
 
-  it('调用logout中间件后, 注销session, 并302到/cas/logout', function(done) {
-    hookAfterCasConfig = function*(ctx, next) {
+  it('调用logout中间件后, 注销session, 并302到/cas/logout', (done) => {
+    hookAfterCasConfig = function* (ctx, next) {
       if (ctx.path === '/') {
         ctx.body = ctx.session.cas || '';
       } else {
+        console.log('hookAfterCasConfig...');
         yield next;
       }
     };
@@ -102,6 +100,7 @@ describe('logout中间件正常', function() {
       expect(body.st).to.not.be.empty;
 
       res = yield request.get('/logout').set('Cookie', handleCookies.getCookies(cookies)).expect(302);
+      console.log('res.header.location: ', res.header.location);
       expect(res.header.location.indexOf(`${serverPath}/cas/logout`) > -1).to.be.true;
       done();
     });
