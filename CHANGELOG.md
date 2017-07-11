@@ -1,3 +1,12 @@
+1.2.12
+========
+* feature: 支持servicePrefix配置中存在路径的情况
+
+
+1.2.0 
+========
+* 升级express到koa, 支持原有的全部cas属性
+
 1.1.24
 =================
 * Change the behavior of `options.redirect(req, res)`, return you must return the pathname where you want to redirect other than return a Boolean and handle response in the function in the past.

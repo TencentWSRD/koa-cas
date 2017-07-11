@@ -91,7 +91,7 @@ class ConnectCas {
     const that = this;
     return function* coreMiddleware(next) {
       const ctx = this;
-      console.log(`ctx.originalUrl: `, ctx.originalUrl, ", path: ", ctx.path);
+      console.log('ctx.originalUrl: ', ctx.originalUrl, ', path: ', ctx.path);
       if (!ctx.sessionStore) throw new Error('You must setup a session store before you can use CAS client!');
       if (!ctx.session) throw new Error(`Unexpected ctx.session ${ctx.session}`);
 
@@ -107,12 +107,12 @@ class ConnectCas {
           logger.warn('options.restletIntegration is set, but options.paths.restletIntegration is undefined! Maybe you forget to set all your paths.');
         } else {
           ctx.clearRestlet = co.wrap(function* () {
-            return yield clearRestletTGTs.bind(null, options, logger);
+            return yield clearRestletTGTs.bind(ctx, options, logger);
           });
 
           ctx.request.clearRestlet = () => {
             deprecate('ctx.request.clearRestlet is deprecated, please use \'ctx.clearResetlet\'');
-            return ctx.clearRestlet.apply(ctx, Array.from(arguments));
+            return ctx.clearRestlet(...Array.from(arguments));
           };
 
           for (const i in options.restletIntegration) {
@@ -177,7 +177,7 @@ class ConnectCas {
 
       ctx.request.getProxyTicket = () => {
         deprecate('"ctx.request.getProxyTicket" is deprecated, please use "ctx.getProxyTicket"');
-        return ctx.getProxyTicket.apply(ctx, Array.from(arguments));
+        return ctx.getProxyTicket(...Array.from(arguments));
       };
 
       const afterHook = options.hooks && is.function(options.hooks.after) ? options.hooks.after.bind(this, ctx, next) : () => Promise.resolve();

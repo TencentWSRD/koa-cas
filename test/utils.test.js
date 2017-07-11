@@ -22,24 +22,23 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-describe('utils单元测试', function() {
-
+describe('utils单元测试', () => {
   const localPath = 'http://localhost:3002';
   const port = 3002;
   const httpsPort = 3003;
   const httpsLocalPath = 'https://localhost:3003';
 
   const loggerFactory = function (ctx, type) { // eslint-disable-line
-    return function() {};
+    return function () {};
   };
 
   let app;
   let server;
   let httpsServer;
 
-  before(function(done) {
+  before((done) => {
     app = new Koa();
-    app.keys = [ 'cas', 'test' ];
+    app.keys = ['cas', 'test'];
     app.use(convert.back(cookie.default('here is some secret')));
     app.use(bodyParser());
     app.use(convert.back(json()));
@@ -64,7 +63,7 @@ describe('utils单元测试', function() {
             this.body = {
               message: 'Not Found',
             };
-            return;
+
         }
       } else {
         return yield next;
@@ -81,28 +80,28 @@ describe('utils单元测试', function() {
       rejectUnhauthorized: false,
     };
 
-    server = http.createServer(app.callback()).listen(port, function(err) {
+    server = http.createServer(app.callback()).listen(port, (err) => {
       if (err) throw err;
 
-      httpsServer = https.createServer(options, app.callback()).listen(httpsPort, function(err) {
+      httpsServer = https.createServer(options, app.callback()).listen(httpsPort, (err) => {
         if (err) throw err;
         done();
       });
     });
   });
 
-  after(function(done) {
-    server.close(function(err) {
+  after((done) => {
+    server.close((err) => {
       if (err) throw err;
 
-      httpsServer.close(function(err) {
+      httpsServer.close((err) => {
         if (err) throw err;
         done();
       });
     });
   });
 
-  it('toArray, 传入伪数组, 输出真正数组', function() {
+  it('toArray, 传入伪数组, 输出真正数组', () => {
     function aFunction() {
       expect(toArray(arguments)).to.be.a('array');
       expect(toArray(null)).to.be.a('array');
@@ -116,7 +115,7 @@ describe('utils单元测试', function() {
     aFunction(1, 2, 3);
   });
 
-  it('getPath传入指定名称, 返回拼好的路径', function() {
+  it('getPath传入指定名称, 返回拼好的路径', () => {
     const options = {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
@@ -129,14 +128,15 @@ describe('utils单元测试', function() {
         proxyCallback: '/cas/proxyCallback',
         restletIntegration: '/cas/v1/tickets',
       },
+      supportSubDomain: false,
     };
 
-    expect(getPath('login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(getPath('logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
-    expect(getPath('pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
+    expect(getPath({}, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath({}, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://localhost:8080/cas/validate')}`);
+    expect(getPath({}, 'pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
 
     // absolute path
-    expect(getPath('pgtUrl', {
+    expect(getPath({}, 'pgtUrl', {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
       paths: {
@@ -150,15 +150,78 @@ describe('utils单元测试', function() {
       },
     })).to.equal('http://10.17.86.87:8080/cas/proxyCallback');
 
-    expect(getPath('serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
-    expect(getPath('proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
-    expect(getPath('service', options)).to.equal('http://localhost:8080/cas/validate');
-    expect(getPath('validate', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath({}, 'serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
+    expect(getPath({}, 'proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
+    expect(getPath({}, 'service', options)).to.equal('http://localhost:8080/cas/validate');
+    expect(getPath({}, 'validate', options)).to.equal('http://localhost:8080/cas/validate');
 
-    expect(getPath('restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
+    expect(getPath({}, 'restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
   });
 
-  it('isMatchRule校验规则符合预期', function() {
+  it('getPath传入指定名称, 支持subdomain, 返回拼好的路径', () => {
+    const options = {
+      servicePrefix: 'http://localhost:8080',
+      serverPath: 'http://cas.sdet.wsd.com',
+      paths: {
+        validate: '/cas/validate',
+        serviceValidate: '/cas/serviceValidate',
+        proxy: '/cas/proxy',
+        login: '/cas/login',
+        logout: '/cas/logout',
+        proxyCallback: '/cas/proxyCallback',
+        restletIntegration: '/cas/v1/tickets',
+      },
+      supportSubDomain: true,
+    };
+    const ctx = { originalUrl: 'http://subdomain.localhost:8080' };
+    expect(getPath(ctx, 'login', options)).to.equal(`http://cas.sdet.wsd.com/cas/login?service=${encodeURIComponent('http://subdomain.localhost:8080/cas/validate')}`);
+    expect(getPath(ctx, 'logout', options)).to.equal(`http://cas.sdet.wsd.com/cas/logout?service=${encodeURIComponent('http://subdomain.localhost:8080/cas/validate')}`);
+    expect(getPath(ctx, 'pgtUrl', options)).to.equal('http://localhost:8080/cas/proxyCallback');
+
+    // absolute path
+    expect(getPath(ctx, 'pgtUrl', {
+      servicePrefix: 'http://localhost:8080',
+      serverPath: 'http://cas.sdet.wsd.com',
+      paths: {
+        validate: '/cas/validate',
+        serviceValidate: '/cas/serviceValidate',
+        proxy: '/cas/proxy',
+        login: '/cas/login',
+        logout: '/cas/logout',
+        proxyCallback: 'http://10.17.86.87:8080/cas/proxyCallback',
+        restletIntegration: '/cas/v1/tickets',
+      },
+    })).to.equal('http://10.17.86.87:8080/cas/proxyCallback');
+
+    expect(getPath(ctx, 'serviceValidate', options)).to.equal('http://cas.sdet.wsd.com/cas/serviceValidate');
+    expect(getPath(ctx, 'proxy', options)).to.equal('http://cas.sdet.wsd.com/cas/proxy');
+    expect(getPath(ctx, 'service', options)).to.equal('http://subdomain.localhost:8080/cas/validate');
+    expect(getPath(ctx, 'validate', options)).to.equal('http://subdomain.localhost:8080/cas/validate');
+
+    expect(getPath(ctx, 'restletIntegration', options)).to.equal('http://cas.sdet.wsd.com/cas/v1/tickets');
+  });
+
+
+  it.only('utils.getPath(ctx, pgtUrl, options) servicePrefix中配置子路径', () => {
+    const ctx = {};
+    const options = {
+      servicePrefix: 'http://localhost:8080/ci',
+      serverPath: 'http://cas.sdet.wsd.com',
+      paths: {
+        validate: '/ci/cas/validate',
+        serviceValidate: '/cas/serviceValidate',
+        proxy: '/cas/proxy',
+        login: '/cas/login',
+        logout: '/cas/logout',
+        proxyCallback: '/ci/cas/proxyCallback',
+        restletIntegration: '/cas/v1/tickets',
+      },
+    };
+    expect(getPath(ctx, 'pgtUrl', options)).to.equal('http://localhost:8080/ci/cas/proxyCallback');
+    expect(getPath({}, 'validate', options)).to.equal('http://localhost:8080/ci/cas/validate');
+  });
+
+  it('isMatchRule校验规则符合预期', () => {
     const ctx = {
       path: '/',
     };
@@ -178,7 +241,7 @@ describe('utils单元测试', function() {
     })).to.be.false;
   });
 
-  it('getOrigin能够获取正确原始路径', function() {
+  it('getOrigin能够获取正确原始路径', () => {
     const ctx = {
       originalUrl: '/api',
       query: {
@@ -200,76 +263,76 @@ describe('utils单元测试', function() {
     })).to.equal('http://localhost:8080/api');
   });
 
-  it('shouldIgnore能够正确的解析规则', function() {
+  it('shouldIgnore能够正确的解析规则', () => {
     const ctx = {
       path: '/',
     };
 
     expect(shouldIgnore(ctx, {
-      match: [ '/' ],
+      match: ['/'],
       logger: loggerFactory,
     })).to.be.false;
 
     expect(shouldIgnore(ctx, {
-      match: [ '/api' ],
+      match: ['/api'],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
-      match: [ /\// ],
+      match: [/\//],
       logger: loggerFactory,
     })).to.be.false;
 
     expect(shouldIgnore(ctx, {
-      match: [ /\/api/ ],
+      match: [/\/api/],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
       match: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/';
-      } ],
+      }],
       logger: loggerFactory,
     })).to.be.false;
 
     expect(shouldIgnore(ctx, {
       match: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/api';
-      } ],
+      }],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
-      ignore: [ '/' ],
+      ignore: ['/'],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
-      ignore: [ '/api' ],
+      ignore: ['/api'],
       logger: loggerFactory,
     })).to.be.false;
 
     expect(shouldIgnore(ctx, {
-      ignore: [ /\// ],
+      ignore: [/\//],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
-      ignore: [ /\/api/ ],
+      ignore: [/\/api/],
       logger: loggerFactory,
     })).to.be.false;
 
     expect(shouldIgnore(ctx, {
       ignore: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/';
-      } ],
+      }],
       logger: loggerFactory,
     })).to.be.true;
 
     expect(shouldIgnore(ctx, {
       ignore: [ function(pathname, ctx) { // eslint-disable-line
         return pathname === '/api';
-      } ],
+      }],
       logger: loggerFactory,
     })).to.be.false;
 
@@ -280,8 +343,7 @@ describe('utils单元测试', function() {
     })).to.be.false;
   });
 
-  it('getLastUrl能够正确的获取最后的访问路径, 并设置默认值', function() {
-
+  it('getLastUrl能够正确的获取最后的访问路径, 并设置默认值', () => {
     const options = {
       servicePrefix: 'http://localhost:8080',
       serverPath: 'http://cas.sdet.wsd.com',
@@ -318,7 +380,7 @@ describe('utils单元测试', function() {
     expect(getLastUrl({}, options)).to.equal('/');
   });
 
-  it('getRequest能够正确发送http GET请求,接收请求', function(done) {
+  it('getRequest能够正确发送http GET请求,接收请求', (done) => {
     co(function* () {
       const res = yield getRequest(localPath);
       expect(res.status).to.equal(200);
@@ -329,7 +391,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('getRequest能够正确发送https GET请求,接收请求', function(done) {
+  it('getRequest能够正确发送https GET请求,接收请求', (done) => {
     co(function* () {
       const res = yield getRequest(httpsLocalPath);
       expect(res.status).to.equal(200);
@@ -338,7 +400,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('postRequest能够正确发送http POST请求,接收请求', function(done) {
+  it('postRequest能够正确发送http POST请求,接收请求', (done) => {
     co(function* () {
       const data = {
         hello: 'world',
@@ -351,7 +413,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('postRequest能够正确发送http POST请求, 设置特殊头, 并接收请求', function(done) {
+  it('postRequest能够正确发送http POST请求, 设置特殊头, 并接收请求', (done) => {
     co(function* () {
       const data = {
         hello: 'world',
@@ -368,7 +430,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('postRequest能够正确发送https POST请求,接收请求', function(done) {
+  it('postRequest能够正确发送https POST请求,接收请求', (done) => {
     co(function* () {
       const data = {
         hello: 'world',
@@ -381,7 +443,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('deleteRequest能够正确发送http DELETE请求,接收请求', function(done) {
+  it('deleteRequest能够正确发送http DELETE请求,接收请求', (done) => {
     co(function* () {
       const res = yield deleteRequest(localPath);
       expect(res.status).to.equal(200);
@@ -392,7 +454,7 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('deleteRequest能够正确发送https DELETE请求,接收请求', function(done) {
+  it('deleteRequest能够正确发送https DELETE请求,接收请求', (done) => {
     co(function* () {
       const res = yield deleteRequest(httpsLocalPath);
       expect(res.status).to.equal(200);
@@ -403,9 +465,9 @@ describe('utils单元测试', function() {
     }).catch(done);
   });
 
-  it('getLogger工作正常', function(done) {
+  it('getLogger工作正常', (done) => {
     const app = new Koa();
-    app.use(function*(next) {
+    app.use(function* (next) {
       function getLogger(type) {
         let user = 'unknown';
         try {
@@ -424,7 +486,7 @@ describe('utils单元测试', function() {
       return yield next;
     });
 
-    app.use(function*(next) {
+    app.use(function* (next) {
       let logger = getLogger(this, {
         logger(ctx, type) {
           return ctx.getLogger(type);
@@ -454,9 +516,9 @@ describe('utils单元测试', function() {
     });
     let server;
     co(function* () {
-      yield new Promise((r, j) => server = app.listen(3004, (err) => err ? j(err) : r()));
+      yield new Promise((r, j) => server = app.listen(3004, err => err ? j(err) : r()));
       yield getRequest('http://localhost:3004/');
-      yield new Promise((r, j) => server.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => server.close(err => err ? j(err) : r()));
       done();
     }).catch(done);
   });
