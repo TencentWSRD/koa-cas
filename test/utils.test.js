@@ -378,6 +378,17 @@ describe('utils单元测试', () => {
       },
     }, options)).to.equal('/');
 
+    expect(getLastUrl({
+      session: {
+        lastUrl: 'http://dcf.qq.com/oa/cas/node-cas',
+      },
+    }, Object.assign({}, options, {
+      servicePrefix: 'http://dcf.qq.com',
+      paths: {
+        validate: '/oa/cas/node-cas',
+      },
+    }))).to.equal('/');
+
     expect(getLastUrl({}, options)).to.equal('/');
   });
 

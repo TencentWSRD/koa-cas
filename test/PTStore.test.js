@@ -7,8 +7,7 @@ const casClientFactory = require('./lib/casClientFactory');
 const PTStore = require('../lib/ptStroe');
 const handleCookies = require('./lib/handleCookie');
 
-describe('PTStore功能正常', function() {
-
+describe('PTStore功能正常', () => {
   const localhost = 'http://127.0.0.1';
   const casPort = 3004;
   const clientPort = 3002;
@@ -24,8 +23,7 @@ describe('PTStore功能正常', function() {
   let hookAfterCasConfig;
   let ptStore;
 
-  beforeEach(function(done) {
-
+  beforeEach((done) => {
     casClientApp = new Koa();
     casClientFactory(casClientApp, {
       servicePrefix: clientPath,
@@ -38,18 +36,16 @@ describe('PTStore功能正常', function() {
         app.use(function* (next) {
           if (typeof hookBeforeCasConfig === 'function') {
             return yield hookBeforeCasConfig(this, next);
-          } else {
-            return yield next;
           }
+          return yield next;
         });
       },
       afterCasConfigHook(app) {
         app.use(function* (next) {
           if (typeof hookAfterCasConfig === 'function') {
             return yield hookAfterCasConfig(this, next);
-          } else {
-            return yield next;
           }
+          return yield next;
         });
       },
     });
@@ -80,7 +76,7 @@ describe('PTStore功能正常', function() {
     co(function* () {
       console.log('beforeEach');
       yield new Promise((r, j) => {
-        casClientServer = casClientApp.listen(clientPort, (err) => err ? j(err) : r());
+        casClientServer = casClientApp.listen(clientPort, err => err ? j(err) : r());
       });
       console.log(`casClientServer listen ${clientPort}`);
       request = supertest.agent(casClientServer);
@@ -88,17 +84,17 @@ describe('PTStore功能正常', function() {
     });
   });
 
-  afterEach(function(done) {
+  afterEach((done) => {
     hookAfterCasConfig = null;
     hookBeforeCasConfig = null;
     co(function* () {
       console.log('afterEach: casClientServer: ', !!casClientServer);
-      yield new Promise((r, j) => casClientServer.close((err) => err ? j(err) : r()));
+      yield new Promise((r, j) => casClientServer.close(err => err ? j(err) : r()));
       done();
     });
   });
 
-  it('未初始化, 直接get, remove, clear, 不会出现异常', function(done) {
+  it('未初始化, 直接get, remove, clear, 不会出现异常', (done) => {
     ptStore = new PTStore({
       logger() {
         return () => {};
@@ -117,10 +113,10 @@ describe('PTStore功能正常', function() {
       res = yield request.get('/clear').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
       expect(res.text).to.not.be.empty;
       done();
-    }).catch((err) => done(err));
+    }).catch(err => done(err));
   });
 
-  it('set后, 在过期时间内, 可以正常获取', function(done) {
+  it('set后, 在过期时间内, 可以正常获取', (done) => {
     ptStore = new PTStore();
 
     co(function* () {
@@ -136,7 +132,7 @@ describe('PTStore功能正常', function() {
     });
   });
 
-  it('set后, 立刻获取能够获取, 但超过过期时间, 无法获取', function(done) {
+  it('set后, 立刻获取能够获取, 但超过过期时间, 无法获取', (done) => {
     ptStore = new PTStore({
       ttl: 1000,
     });
@@ -147,12 +143,12 @@ describe('PTStore功能正常', function() {
       expect(res.text).to.equal(ptValue);
       const cookies = handleCookies.setCookies(res.header);
 
-      yield new Promise((r) => setTimeout(() => r(), 500));
+      yield new Promise(r => setTimeout(() => r(), 500));
       res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
       expect(res.text).to.not.be.empty;
       expect(res.text).to.equal(ptValue);
 
-      yield new Promise((r) => setTimeout(() => r(), 1000));
+      yield new Promise(r => setTimeout(() => r(), 1000));
       res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
       expect(res.text).to.be.empty;
 
@@ -160,7 +156,7 @@ describe('PTStore功能正常', function() {
     });
   });
 
-  it('remove后, 无论存不存在都正常响应, 删除后get不到该pt', function(done) {
+  it('remove后, 无论存不存在都正常响应, 删除后get不到该pt', (done) => {
     ptStore = new PTStore();
 
     co(function* () {
@@ -178,11 +174,10 @@ describe('PTStore功能正常', function() {
 
       res = yield request.get('/get').set('Cookie', handleCookies.getCookies(cookies)).expect(200);
       expect(res.text).to.be.empty;
-      done();
-    });
+    }).then(done).catch(done);
   });
 
-  it('clear后, 啥都获取不到', function(done) {
+  it('clear后, 啥都获取不到', (done) => {
     ptStore = new PTStore();
 
     co(function* () {
@@ -203,5 +198,4 @@ describe('PTStore功能正常', function() {
       done();
     });
   });
-
 });
