@@ -4,7 +4,7 @@ const proxyCallback = require('./lib/proxyCallback');
 const authenticate = require('./lib/authenticate');
 const slo = require('./lib/slo');
 const getProxyTicket = require('./lib/getProxyTicket');
-const getProxyTicketThroughRestletReq = require('./lib/getProxyTicketThroughRestletReq');
+const { getProxyTicketThroughRestletReq, getProxyTicketThroughRestletReqDcache } = require('./lib/getProxyTicketThroughRestletReq');
 const PTStroe = require('./lib/ptStroe');
 const utils = require('./lib/utils');
 const clearRestletTGTs = require('./lib/clearRestletTGTs');
@@ -166,11 +166,26 @@ class ConnectCas {
             restletIntegrateParams = options.restletIntegration[matchedRestletIntegrateRule].params;
           }
         }
-        const pt = matchedRestletIntegrateRule ? yield getProxyTicketThroughRestletReq.call(that, ctx, targetService, {
-          name: matchedRestletIntegrateRule,
-          params: restletIntegrateParams,
-          cache: options.restletIntegrationIsUsingCache,
-        }) : yield getProxyTicket.call(that, ctx, proxyOptions);
+        let pt = null;
+        if (matchedRestletIntegrateRule) {
+          if (options.restletCache && options.restletCache.type === 'dcache') {
+            pt = yield getProxyTicketThroughRestletReqDcache.call(that, ctx, targetService, {
+              name: matchedRestletIntegrateRule,
+              params: restletIntegrateParams,
+              cache: options.restletIntegrationIsUsingCache,
+              getRestletIntegrateRuleKey: options.getRestletIntegrateRuleKey,
+              restletCache: options.restletCache,
+            })
+          } else {
+            pt = yield getProxyTicketThroughRestletReq.call(that, ctx, targetService, {
+              name: matchedRestletIntegrateRule,
+              params: restletIntegrateParams,
+              cache: options.restletIntegrationIsUsingCache,
+            })
+          }
+        } else {
+          pt = yield getProxyTicket.call(that, ctx, proxyOptions);
+        }
         return pt;
       });
 
